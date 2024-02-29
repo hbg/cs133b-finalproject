@@ -1,3 +1,4 @@
+
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -13,8 +14,8 @@ def get_walls(x, y, width, height, visited):
         neighbors.append((x, y + 1))
     return neighbors
 
-def generate_maze(width, height, path_probability=0.1):  # Adjust path_probability for clearer paths
-    grid = np.ones(shape=(height, width))
+def generate_maze(width, height):
+    grid = np.zeros(shape=(height, width))
     walls = []
     visited = set()
     start_x = np.random.randint(0, width)
@@ -30,8 +31,8 @@ def generate_maze(width, height, path_probability=0.1):  # Adjust path_probabili
         for neighbor in neighbors:
             if neighbor in visited:
                 visited_neighbors.append(neighbor)
-        if len(visited_neighbors) == 1 or np.random.rand() < path_probability:
-            grid[y, x] = 0
+        if len(visited_neighbors) == 1:
+            grid[y, x] = 1
             visited.add((x, y))
             walls.extend(neighbors)
         walls.remove(wall)
@@ -39,6 +40,6 @@ def generate_maze(width, height, path_probability=0.1):  # Adjust path_probabili
     grid_with_edges[1:-1, 1:-1] = grid
     return grid_with_edges
 
-maze = generate_maze(50, 50, path_probability=0.0001)
-plt.pcolormesh(maze, cmap='binary')
+maze = generate_maze(50, 50)
+plt.pcolormesh(maze)
 plt.show()
