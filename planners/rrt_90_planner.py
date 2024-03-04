@@ -24,7 +24,7 @@ from generators.maze_generator import generate_maze
 DSTEP = 1
 
 # Maximum number of steps (attempts) or nodes (successful steps).
-SMAX = 500000
+SMAX = 50000
 NMAX = 1500
 
 
@@ -114,12 +114,16 @@ class Node:
         # Define/remember the state/coordinates (x,y).
         self.x = x
         self.y = y
+        self.directions = ['left', 'right', 'up', 'down']
 
     ############
     # Utilities:
     # In case we want to print the node.
     def __repr__(self):
         return ("<Point %5.2f,%5.2f>" % (self.x, self.y))
+
+    def __eq__(self, other) -> bool:
+        return self.x == other.x and self.y == other.y
 
     # Compute/create an intermediate node.  This can be useful if you
     # need to check the local planner by testing intermediate nodes.
@@ -169,44 +173,48 @@ def rrt(startnode, goalnode, visual):
 
     # Loop - keep growing the tree.
     steps = 0
-    P = 0.05
-    while True:
-        # Determine the target state.
-        if random.random() <= P:
-            targetnode = goalnode
-        else:
-            targetnode = Node(random.uniform(0, 41), random.uniform(0, 41))
-
-        # Directly determine the distances to the target node.
-        distances = np.array([node.distance(targetnode) for node in tree])
+    found_goal = False
+    while not found_goal:
+        # Directly determine the distances to the goal node.
+        distances = np.array([node.distance(goalnode) for node in tree])
         index     = np.argmin(distances)
         nearnode  = tree[index]
         d         = distances[index]
 
-        # Determine the next node.
-        alpha = min(1, DSTEP / d)
-        int = nearnode.intermediate(targetnode, alpha)
-        if random.random() > .5:
-            right_node = Node(nearnode.x, int.y)
+        if len(nearnode.directions) != 0:
+            direction = random.choice(nearnode.directions)
+            if direction == 'left':
+                nextnode = Node(nearnode.x - DSTEP, nearnode.y)
+                nextnode.directions.remove('right')
+            elif direction == 'right':
+                nextnode = Node(nearnode.x + DSTEP, nearnode.y)
+                nextnode.directions.remove('left')
+            elif direction == 'up':
+                nextnode = Node(nearnode.x, nearnode.y + DSTEP)
+                nextnode.directions.remove('down')
+            elif direction == 'down':
+                nextnode = Node(nearnode.x, nearnode.y - DSTEP)
+                nextnode.directions.remove('up')
+
+            nearnode.directions.remove(direction)
+
+            # Check whether to attach.
+            if nextnode.inFreespace() and nearnode.connectsTo(nextnode) and nextnode not in tree:
+                addtotree(nearnode, nextnode)
+
+                # If within DSTEP, also try connecting to the goal.  If
+                # the connection is made, break the loop to stop growing.
+                if nextnode.distance(goalnode) < DSTEP and nextnode.connectsTo(goalnode):
+                    addtotree(nextnode, goalnode)
+                    found_goal = True
         else:
-            right_node = Node(int.x, nearnode.y)
-        nextnode = right_node
-
-        # Check whether to attach.
-        if nextnode.inFreespace() and nearnode.connectsTo(nextnode):
-            addtotree(nearnode, nextnode)
-
-            # If within DSTEP, also try connecting to the goal.  If
-            # the connection is made, break the loop to stop growing.
-            if nextnode.distance(goalnode) < DSTEP and nextnode.connectsTo(goalnode):
-                addtotree(nextnode, goalnode)
-                break
+            del tree[index]
 
         # Check whether we should abort - too many steps or nodes.
         steps += 1
         if (steps >= SMAX) or (len(tree) >= NMAX):
             print("Aborted after %d steps and the tree having %d nodes" %
-                  (steps, len(tree)))
+                (steps, len(tree)))
             return None
 
     # Build the path.
