@@ -21,7 +21,7 @@ from generators.maze_generator import generate_maze
 #
 #   Define the step size.  Also set the maximum number of nodes.
 #
-DSTEP = 1
+DSTEP = 1.5
 
 # Maximum number of steps (attempts) or nodes (successful steps).
 SMAX = 50000
@@ -174,9 +174,20 @@ def rrt(startnode, goalnode, visual):
     # Loop - keep growing the tree.
     steps = 0
     found_goal = False
+    P = 0.05
     while not found_goal:
         # Directly determine the distances to the goal node.
-        distances = np.array([node.distance(goalnode) for node in tree])
+        if random.random() < P:
+            targetnode = goalnode
+        else:
+            targetnode = None
+            while not targetnode or not targetnode.inFreespace():
+                targetnode = Node(
+                    random.uniform(0, 41),
+                    random.uniform(0, 41)
+                )
+
+        distances = np.array([node.distance(targetnode) for node in tree])
         index     = np.argmin(distances)
         nearnode  = tree[index]
         d         = distances[index]
