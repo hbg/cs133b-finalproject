@@ -13,7 +13,7 @@ from math               import pi, sin, cos, atan2, sqrt, ceil
 from scipy.spatial      import KDTree
 from shapely.geometry   import Point, LineString, Polygon, MultiPolygon
 from shapely.prepared   import prep
-from generators.maze_generator import generate_maze_polygons
+from generators.maze_generator import generate_maze
 
 ######################################################################
 #
@@ -34,11 +34,27 @@ NMAX = 1500
 #
 #   List of obstacles/objects as well as the start/goal.
 #
-difficulty = 1.
+difficulty = 1
 (xmin, xmax) = (0, 41)
 (ymin, ymax) = (0, 41)
+maze = generate_maze(xmax, ymax)
+keys = 4
 
-filled_grids = generate_maze_polygons(41, 41, difficulty)
+# Collect all the triangle and prepare (for faster checking).
+
+polys = []
+for i in range(xmax):
+    for j in range(ymax):
+        if maze[j, i] > 0 and random.random() < difficulty:
+            if (i - 1 >= 0) and maze[j, i - 1] > 0:
+                polys.append(Polygon([[i, j+0.45], [i+0.5, j+0.4], [i+0.5, j+0.55], [i, j+0.55]]))
+            if (i + 1 < xmax) and maze[j, i + 1] > 0:
+                polys.append(Polygon([[i + 0.5, j+0.45], [i+1, j+0.45], [i+1, j+0.55], [i+0.5, j+0.55]]))
+            if (j - 1 >= 0) and maze[j - 1, i] > 0:
+                polys.append(Polygon([[i+0.45, j], [i+0.45, j+0.5], [i+0.55,j+0.5], [i+0.55,j]]))
+            if (j + 1 < ymax) and maze[j + 1, i] > 0:
+                polys.append(Polygon([[i+0.45, j+0.5], [i+0.45, j+1], [i+0.55,j+1], [i+0.55,j+0.5]]))
+filled_grids = prep(MultiPolygon(polys))
 
 # Define the start/goal states (x, y, theta)
 
@@ -139,7 +155,7 @@ class Node:
 #
 #   RRT Functions
 #
-def rrt(startnode, goalnode, visual):
+def rrt(startnode, goalnode, visual, keylist):
     # Start the tree with the startnode (set no parent just in case).
     startnode.parent = None
     tree = [startnode]
@@ -155,6 +171,7 @@ def rrt(startnode, goalnode, visual):
     # Loop - keep growing the tree.
     steps = 0
     P = 0.05
+    keys_collected = 0
     current_node = startnode
     while True:
         # Determine the target state.
@@ -186,6 +203,15 @@ def rrt(startnode, goalnode, visual):
             if nextnode.distance(goalnode) < DSTEP and nextnode.connectsTo(goalnode):
                 addtotree(nextnode, goalnode)
                 break
+
+            # Check if we can grab a key as well
+            for i in range(keys):
+                if nextnode.distance(keylist[i]) < DSTEP and nextnode.connectsTo(keylist[i]) and keylist[i] not in tree:
+                    addtotree(nextnode, keylist[i])
+                    keys_collected += 1
+                    print("Key collected!", keys_collected, "key(s) have been collected")
+
+                    
 
         # Check whether we should abort - too many steps or nodes.
         steps += 1
@@ -234,11 +260,23 @@ def main():
         (xstart, ystart) = (random.uniform(xmin, xmax), random.uniform(ymin, ymax))
         startnode = Node(xstart, ystart)
 
-    (xgoal,  ygoal)  = (random.uniform(xmin, xmax), random.uniform(ymin, ymax))
+    (xgoal,  ygoal)  = (random.uniform(xmin + 1, xmax - 1), random.uniform(ymin + 1, ymax - 1))
     goalnode  = Node(xgoal,  ygoal)
     while not goalnode.inFreespace():
-        (xgoal,  ygoal)  = (random.uniform(xmin, xmax), random.uniform(ymin, ymax))
+        (xgoal,  ygoal)  = (random.uniform(xmin + 1, xmax - 1), random.uniform(ymin + 1, ymax - 1))
         goalnode  = Node(xgoal,  ygoal)
+
+    # Generate and show keys
+    keylist = []
+    for i in range(keys):
+        (key_x, key_y) = (random.uniform(xmin + 1, xmax - 1), random.uniform(ymin + 1, ymax - 1))
+        key = Node(key_x, key_y)
+        while not key.inFreespace():
+            (key_x, key_y) = (random.uniform(xmin + 1, xmax - 1), random.uniform(ymin + 1, ymax - 1))
+            key = Node(key_x, key_y)
+        keylist.append(key)
+        visual.drawNode(key, color='green', marker='o')
+    
 
     # Show the start/goal nodes.
     visual.drawNode(startnode, color='orange', marker='o')
@@ -248,7 +286,7 @@ def main():
 
     # Run the RRT planner.
     print("Running RRT...")
-    path = rrt(startnode, goalnode, visual)
+    path = rrt(startnode, goalnode, visual, keylist)
 
     # If unable to connect, just note before closing.
     if not path:
