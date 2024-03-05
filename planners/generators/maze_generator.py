@@ -1,7 +1,11 @@
 
-import numpy as np
-import matplotlib.pyplot as plt
 import random
+
+import matplotlib.pyplot as plt
+import numpy as np
+from shapely.geometry import MultiPolygon, Polygon
+from shapely.prepared import prep
+
 
 def get_neighbor_passages(x, y, width, height, grid):
     neighbors = []
@@ -56,6 +60,31 @@ def generate_maze(width, height):
         else:
             walls.remove((x, y))
     return grid
+
+def generate_maze_polygons(width, height, difficulty):
+    polys = []
+    maze = generate_maze(width, height)
+    for i in range(width):
+        for j in range(height):
+            x_border_dist = min(i, width - i)
+            y_border_dist = min(j, height - j)
+            if maze[j, i] > 0:
+                if (x_border_dist <= 2 or y_border_dist <= 2) or \
+                      random.random() < difficulty:
+                    if (i - 1 >= 0) and maze[j, i - 1] > 0:
+                        polys.append(Polygon([[i, j+0.45], [i+0.5, j+0.4],
+                                              [i+0.5, j+0.55], [i, j+0.55]]))
+                    if (i + 1 < width) and maze[j, i + 1] > 0:
+                        polys.append(Polygon([[i + 0.5, j+0.45], [i+1, j+0.45],
+                                              [i+1, j+0.55], [i+0.5, j+0.55]]))
+                    if (j - 1 >= 0) and maze[j - 1, i] > 0:
+                        polys.append(Polygon([[i+0.45, j], [i+0.45, j+0.5],
+                                              [i+0.55,j+0.5], [i+0.55,j]]))
+                    if (j + 1 < height) and maze[j + 1, i] > 0:
+                        polys.append(Polygon([[i+0.45, j+0.5], [i+0.45, j+1],
+                                              [i+0.55,j+1], [i+0.55,j+0.5]]))
+    filled_grids = prep(MultiPolygon(polys))
+    return filled_grids
 
 if __name__ == "__main__":
     maze = generate_maze(51, 51)

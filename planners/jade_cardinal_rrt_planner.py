@@ -13,7 +13,7 @@ from math               import pi, sin, cos, atan2, sqrt, ceil
 from scipy.spatial      import KDTree
 from shapely.geometry   import Point, LineString, Polygon, MultiPolygon
 from shapely.prepared   import prep
-from generators.maze_generator import generate_maze
+from generators.maze_generator import generate_maze_polygons
 
 ######################################################################
 #
@@ -37,23 +37,8 @@ NMAX = 1500
 difficulty = 1.
 (xmin, xmax) = (0, 41)
 (ymin, ymax) = (0, 41)
-maze = generate_maze(xmax, ymax)
 
-# Collect all the triangle and prepare (for faster checking).
-
-polys = []
-for i in range(xmax):
-    for j in range(ymax):
-        if maze[j, i] > 0 and random.random() < difficulty:
-            if (i - 1 >= 0) and maze[j, i - 1] > 0:
-                polys.append(Polygon([[i, j+0.45], [i+0.5, j+0.4], [i+0.5, j+0.55], [i, j+0.55]]))
-            if (i + 1 < xmax) and maze[j, i + 1] > 0:
-                polys.append(Polygon([[i + 0.5, j+0.45], [i+1, j+0.45], [i+1, j+0.55], [i+0.5, j+0.55]]))
-            if (j - 1 >= 0) and maze[j - 1, i] > 0:
-                polys.append(Polygon([[i+0.45, j], [i+0.45, j+0.5], [i+0.55,j+0.5], [i+0.55,j]]))
-            if (j + 1 < ymax) and maze[j + 1, i] > 0:
-                polys.append(Polygon([[i+0.45, j+0.5], [i+0.45, j+1], [i+0.55,j+1], [i+0.55,j+0.5]]))
-filled_grids = prep(MultiPolygon(polys))
+filled_grids = generate_maze_polygons(41, 41, difficulty)
 
 # Define the start/goal states (x, y, theta)
 
