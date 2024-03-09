@@ -211,7 +211,7 @@ def rrt(startnode, goalnode, visual, keylist):
                     keys_collected += 1
                     print("Key collected!", keys_collected, "key(s) have been collected")
 
-                    
+
 
         # Check whether we should abort - too many steps or nodes.
         steps += 1
@@ -268,7 +268,7 @@ def main():
 
     # Generate and show keys
     keylist = []
-    for i in range(keys):
+    for _ in range(keys):
         (key_x, key_y) = (random.uniform(xmin + 1, xmax - 1), random.uniform(ymin + 1, ymax - 1))
         key = Node(key_x, key_y)
         while not key.inFreespace():
@@ -276,7 +276,7 @@ def main():
             key = Node(key_x, key_y)
         keylist.append(key)
         visual.drawNode(key, color='green', marker='o')
-    
+
 
     # Show the start/goal nodes.
     visual.drawNode(startnode, color='orange', marker='o')

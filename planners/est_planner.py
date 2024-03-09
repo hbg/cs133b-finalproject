@@ -27,6 +27,8 @@ DSTEP = 1
 SMAX = 500000
 NMAX = 1500
 
+keys = 5
+
 
 ######################################################################
 #
@@ -137,9 +139,9 @@ class Node:
 
 ######################################################################
 #
-#   RRT Functions
+#   EST Functions
 #
-def rrt(startnode, goalnode, visual):
+def est(startnode, goalnode, visual, keylist):
     # Start the tree with the startnode (set no parent just in case).
     startnode.parent = None
     tree = [startnode]
@@ -153,40 +155,59 @@ def rrt(startnode, goalnode, visual):
         visual.show()
 
     # Loop - keep growing the tree.
-    steps = 0
-    P = 0.05
     while True:
-        # Determine the target state.
-        if random.random() <= P:
-            targetnode = goalnode
+        # Determine the local density by the number of nodes nearby.
+        # KDTree uses the coordinates to compute the Euclidean distance.
+        # It returns a NumPy array, same length as nodes in the tree.
+        X = np.array([node.coordinates() for node in tree])
+        kdtree  = KDTree(X)
+        numnear = kdtree.query_ball_point(X, r=1.5*DSTEP, return_length=True)
+
+        # Directly determine the distances to the goal node.
+        distances = np.array([node.distance(goalnode) for node in tree])
+
+        # Select the node from which to grow, which minimizes some metric.
+        scale = 5
+        index = np.argmin(numnear + scale * distances)
+        grownode = tree[index]
+
+
+        # Check the incoming heading, potentially to bias the next node.
+        if grownode.parent is None:
+            heading = 0
         else:
-            targetnode = Node(random.uniform(0, 41), random.uniform(0, 41))
+            heading = atan2(grownode.y - grownode.parent.y,
+                            grownode.x - grownode.parent.x)
 
-        # Directly determine the distances to the target node.
-        distances = np.array([node.distance(targetnode) for node in tree])
-        index     = np.argmin(distances)
-        nearnode  = tree[index]
-        d         = distances[index]
+        # Find something nearby: keep looping until the tree grows.
+        while True:
+            # Pick the next node randomly.
+            angle = np.random.normal(heading, pi / 2)
+            # NOTE: To remove the grid movement, comment out the next line
+            angle = (angle // (pi / 2)) * (pi / 2)
+            nextnode = Node(grownode.x + DSTEP * cos(angle), grownode.y + DSTEP * sin(angle))
 
-        # Determine the next node.
-        alpha = min(1, DSTEP / d)
-        nextnode = nearnode.intermediate(targetnode, alpha)
-
-        # Check whether to attach.
-        if nextnode.inFreespace() and nearnode.connectsTo(nextnode):
-            addtotree(nearnode, nextnode)
-
-            # If within DSTEP, also try connecting to the goal.  If
-            # the connection is made, break the loop to stop growing.
-            if nextnode.distance(goalnode) < DSTEP and nextnode.connectsTo(goalnode):
-                addtotree(nextnode, goalnode)
+            # Try to connect.
+            if grownode.connectsTo(nextnode) and nextnode.inFreespace():
+                addtotree(grownode, nextnode)
                 break
 
-        # Check whether we should abort - too many steps or nodes.
-        steps += 1
-        if (steps >= SMAX) or (len(tree) >= NMAX):
-            print("Aborted after %d steps and the tree having %d nodes" %
-                  (steps, len(tree)))
+
+        # Check if we can grab a key as well
+        for i in range(keys):
+            if nextnode.distance(keylist[i]) < DSTEP and nextnode.connectsTo(keylist[i]) and keylist[i] not in tree:
+                addtotree(nextnode, keylist[i])
+                keys_collected += 1
+                print("Key collected!", keys_collected, "key(s) have been collected")
+
+        # Once grown, also check whether to connect to goal.
+        if nextnode.distance(goalnode) < DSTEP:
+            addtotree(nextnode, goalnode)
+            break
+
+        # Check whether we should abort - too many nodes.
+        if (len(tree) >= NMAX):
+            print("Aborted with the tree having %d nodes" % len(tree))
             return None
 
     # Build the path.
@@ -195,8 +216,7 @@ def rrt(startnode, goalnode, visual):
         path.insert(0, path[0].parent)
 
     # Report and return.
-    print("Finished after %d steps and the tree having %d nodes" %
-          (steps, len(tree)))
+    print("Finished  with the tree having %d nodes" % len(tree))
     return path
 
 
@@ -235,6 +255,17 @@ def main():
         (xgoal,  ygoal)  = (random.uniform(xmin, xmax), random.uniform(ymin, ymax))
         goalnode  = Node(xgoal,  ygoal)
 
+
+    keylist = []
+    for _ in range(keys):
+        (key_x, key_y) = (random.uniform(xmin + 1, xmax - 1), random.uniform(ymin + 1, ymax - 1))
+        key = Node(key_x, key_y)
+        while not key.inFreespace():
+            (key_x, key_y) = (random.uniform(xmin + 1, xmax - 1), random.uniform(ymin + 1, ymax - 1))
+            key = Node(key_x, key_y)
+        keylist.append(key)
+        visual.drawNode(key, color='green', marker='o')
+
     # Show the start/goal nodes.
     visual.drawNode(startnode, color='orange', marker='o')
     visual.drawNode(goalnode,  color='purple', marker='o')
@@ -243,7 +274,7 @@ def main():
 
     # Run the RRT planner.
     print("Running RRT...")
-    path = rrt(startnode, goalnode, visual)
+    path = est(startnode, goalnode, visual, keylist)
 
     # If unable to connect, just note before closing.
     if not path:
