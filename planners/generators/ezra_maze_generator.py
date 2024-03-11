@@ -42,35 +42,41 @@ def get_neighbor_walls(x, y, width, height, grid):
         neighbors.append((x, y + 2))
     return neighbors
 
-def is_valid(grid, x, y, width, height):
-    if x >= 0 and x < width and y >= 0 and y < height:
-        if grid[y][x] == END or grid[y][x] == EMPTY or (x, y) in keys:
-            return True
-    return False
-
-def remove_key_and_lock(grid, key_x, key_y, index):
-    keys.pop(index)
-    lock = locks.pop(index)
-    grid[key_y][key_x] = 0
+def remove_key_and_lock(grid, index):
+    key = keys[index]
+    lock = locks[index]
+    grid[key[1]][key[0]] = 0
     grid[lock[1]][lock[0]] = 0
 
-def is_solvable(grid, start_x, start_y, visited, width, height):
-    directions = [(-1, -1), (-1, 1), (1, -1), (1, 1)]
+def is_solvable(grid, queue, width, height):
+    directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+    visited = set()
 
-    for dx, dy in directions:
-        new_x, new_y = start_x + dx, start_y + dy
-        if (new_x, new_y) not in visited and is_valid(grid, new_x, new_y, width, height):
-            if grid[new_y][new_x] == END:
-                return True
-            elif grid[new_y][new_x] == KEY:
-                visited.add((start_x, start_y))
-                remove_key_and_lock(grid, new_x, new_y, keys.index((new_x, new_y)))
-                return is_solvable(grid, new_x, new_y, visited, width, height)
-            elif grid[new_y][new_x] == EMPTY:
-                visited.add((start_x, start_y))
-                return is_solvable(grid, new_x, new_y, visited, width, height)
-            else:
-                visited.add((start_x, start_y))
+    while len(queue) != 0:
+        start_x, start_y = queue.pop(0)
+        if grid[start_y][start_x] == END:
+            return True
+        
+        visited.add((start_x, start_y))
+        for dx, dy in directions:
+            new_x, new_y = start_x + dx, start_y + dy
+            if new_x >= 0 and new_x < width and new_y >= 0 and new_y < height and (new_x, new_y) not in visited:
+                cell = grid[new_y][new_x]
+                if cell == END:
+                    return True
+                elif cell == KEY:
+                    remove_key_and_lock(grid, keys.index((new_x, new_y)))
+                    queue.append((new_x, new_y))
+                elif cell == EMPTY:
+                    queue.append((new_x, new_y))
+                elif cell == LOCK:
+                    all_locks = True
+                    for x, y in queue:
+                        if grid[y][x] != LOCK:
+                            queue.append((new_x, new_y))
+                            all_locks = False
+                    if all_locks:
+                        return False
     return False
 
 def generate_maze(width, height, num_keys):
@@ -133,7 +139,7 @@ def generate_maze(width, height, num_keys):
         grid[lock_y, lock_x] = LOCK
         locks.append((lock_x, lock_y))
     
-    if is_solvable(grid, start_x, start_y, set((start_x, start_y)), width, height):
+    if is_solvable(grid.copy(), [(start_x, start_y)], width, height):
         return (grid, keys, locks, (start_x, start_y), (end_x, end_y))
     else:
         print('generating new maze.')

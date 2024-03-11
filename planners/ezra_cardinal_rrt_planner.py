@@ -60,7 +60,7 @@ polys = []
 lock_polys = []
 for i in range(xmax):
     for j in range(ymax):
-        if maze[j, i] > 0 and random.random() < difficulty:
+        if maze[j, i] == 1 and random.random() < difficulty:
             if (i - 1 >= 0) and maze[j, i - 1] == 1:
                 polys.append(Polygon([[i, j+0.45], [i+0.5, j+0.4], [i+0.5, j+0.55], [i, j+0.55]]))
             if (i + 1 < xmax) and maze[j, i + 1] == 1:
@@ -70,17 +70,12 @@ for i in range(xmax):
             if (j + 1 < ymax) and maze[j + 1, i] == 1:
                 polys.append(Polygon([[i+0.45, j+0.5], [i+0.45, j+1], [i+0.55,j+1], [i+0.55,j+0.5]]))
             
-            # TODO: fix locked walls code.
-            if (i - 1 >= 0) and maze[j, i - 1] == LOCK:
-                lock_polys.append(Polygon([[i, j+0.45], [i+0.5, j+0.4], [i+0.5, j+0.55], [i, j+0.55]]))
-            if (i + 1 < xmax) and maze[j, i + 1] == LOCK:
-                lock_polys.append(Polygon([[i + 0.5, j+0.45], [i+1, j+0.45], [i+1, j+0.55], [i+0.5, j+0.55]]))
-            if (j - 1 >= 0) and maze[j - 1, i] == LOCK:
-                lock_polys.append(Polygon([[i+0.45, j], [i+0.45, j+0.5], [i+0.55,j+0.5], [i+0.55,j]]))
-            if (j + 1 < ymax) and maze[j + 1, i] == LOCK:
-                lock_polys.append(Polygon([[i+0.45, j+0.5], [i+0.45, j+1], [i+0.55,j+1], [i+0.55,j+0.5]]))
+        # TODO: fix locked walls code.
+        elif maze[j, i] == LOCK:
+            lock_polys.append(Polygon([[i, j], [i, j+1], [i+1, j+1], [i+1, j]]))
 filled_grids = prep(MultiPolygon(polys))
-lock_polys = prep(MultiPolygon(lock_polys))
+lock_polys = MultiPolygon(lock_polys)
+lock_polys_prep = prep(lock_polys)
 
 # Define the start/goal states (x, y, theta)
 
@@ -107,7 +102,7 @@ class Visualization:
         for poly in filled_grids.context.geoms:
             plt.plot(*poly.exterior.xy, 'k-', linewidth=2)
 
-        for poly in lock_polys.context.geoms:
+        for poly in lock_polys_prep.context.geoms:
             plt.plot(*poly.exterior.xy, 'c-', linewidth=2)
 
         # Show.
@@ -172,12 +167,12 @@ class Node:
         if (self.x <= xmin or self.x >= xmax or
             self.y <= ymin or self.y >= ymax):
             return False
-        return filled_grids.disjoint(Point(self.coordinates())) and lock_polys.disjoint(Point(self.coordinates()))
+        return filled_grids.disjoint(Point(self.coordinates())) and lock_polys_prep.disjoint(Point(self.coordinates()))
 
     # Check the local planner - whether this connects to another node.
     def connectsTo(self, other):
         line = LineString([self.coordinates(), other.coordinates()])
-        return filled_grids.disjoint(line) and lock_polys.disjoint(line)
+        return filled_grids.disjoint(line) and lock_polys_prep.disjoint(line)
 
 
 ######################################################################
@@ -185,6 +180,8 @@ class Node:
 #   RRT Functions
 #
 def rrt(startnode, goalnode, visual, keylist):
+    global lock_polys
+    global lock_polys_prep
     # Start the tree with the startnode (set no parent just in case).
     startnode.parent = None
     tree = [startnode]
@@ -238,9 +235,12 @@ def rrt(startnode, goalnode, visual, keylist):
                 if nextnode.distance(key_list[i]) < DSTEP and nextnode.connectsTo(key_list[i]) and key_list[i] not in tree:
                     addtotree(nextnode, key_list[i])
                     keys_collected += 1
-                    key_list.remove(key_list[i])
                     visual.show()
-                    print("Key collected! Corresponding lock removed.")
+                    key_list.remove(key_list[i])
+                    print("Key collected!")
+                    lock_polys = MultiPolygon([poly for idx, poly in enumerate(lock_polys.geoms) if idx != i])
+                    lock_polys_prep = prep(lock_polys)
+                    break
 
 
 
@@ -292,7 +292,7 @@ def main():
     goalnode  = Node(xgoal,  ygoal)
 
     # Generate and show keys
-    for i in range(num_keys):
+    for i in range(len(keys)):
         key_node = Node(keys[i][0], keys[i][1])
         key_list.append(key_node)
         visual.drawNode(key_node, color='green', marker='o')
