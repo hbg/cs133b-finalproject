@@ -153,7 +153,7 @@ def est(startnode, goalnode, visual, keylist):
         tree.append(newnode)
         visual.drawEdge(oldnode, newnode, color='g', linewidth=1)
         visual.show()
-
+    keys_collected = 0
     # Loop - keep growing the tree.
     while True:
         # Determine the local density by the number of nodes nearby.
@@ -184,7 +184,7 @@ def est(startnode, goalnode, visual, keylist):
             # Pick the next node randomly.
             angle = np.random.normal(heading, pi / 2)
             # NOTE: To remove the grid movement, comment out the next line
-            angle = (angle // (pi / 2)) * (pi / 2)
+            angle = (angle // (pi / 4)) * (pi / 4)
             nextnode = Node(grownode.x + DSTEP * cos(angle), grownode.y + DSTEP * sin(angle))
 
             # Try to connect.
@@ -272,8 +272,8 @@ def main():
     visual.show("Showing basic world")
 
 
-    # Run the RRT planner.
-    print("Running RRT...")
+    # Run the EST planner.
+    print("Running EST...")
     path = est(startnode, goalnode, visual, keylist)
 
     # If unable to connect, just note before closing.
