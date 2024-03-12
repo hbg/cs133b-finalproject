@@ -56,7 +56,7 @@ def is_solvable(grid, queue, width, height):
         start_x, start_y = queue.pop(0)
         if grid[start_y][start_x] == END:
             return True
-        
+
         visited.add((start_x, start_y))
         for dx, dy in directions:
             new_x, new_y = start_x + dx, start_y + dy
@@ -138,7 +138,7 @@ def generate_maze(width, height, num_keys):
             lock_y = np.random.randint(0, height - 1)
         grid[lock_y, lock_x] = LOCK
         locks.append((lock_x, lock_y))
-    
+
     if is_solvable(grid.copy(), [(start_x, start_y)], width, height):
         return (grid, keys, locks, (start_x, start_y), (end_x, end_y))
     else:
@@ -156,7 +156,7 @@ def generate_maze_polygons(width, height, difficulty):
                 if (x_border_dist <= 2 or y_border_dist <= 2) or \
                       random.random() < difficulty:
                     if (i - 1 >= 0) and maze[j, i - 1] > 0:
-                        polys.append(Polygon([[i, j+0.45], [i+0.5, j+0.4],
+                        polys.append(Polygon([[i, j+0.45], [i+0.5, j+0.45],
                                               [i+0.5, j+0.55], [i, j+0.55]]))
                     if (i + 1 < width) and maze[j, i + 1] > 0:
                         polys.append(Polygon([[i + 0.5, j+0.45], [i+1, j+0.45],
