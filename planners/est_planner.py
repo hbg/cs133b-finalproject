@@ -13,7 +13,7 @@ from math               import pi, sin, cos, atan2, sqrt, ceil
 from scipy.spatial      import KDTree
 from shapely.geometry   import Point, LineString, Polygon, MultiPolygon
 from shapely.prepared   import prep
-from generators.maze_generator import generate_maze_polygons
+from generators.maze import Maze
 
 ######################################################################
 #
@@ -37,11 +37,13 @@ keys = 5
 #   List of obstacles/objects as well as the start/goal.
 #
 difficulty = 0.7
-(xmin, xmax) = (0, 41)
-(ymin, ymax) = (0, 41)
+WIDTH = 41
+HEIGHT = 41
 
-filled_grids = generate_maze_polygons(41, 41, difficulty)
+(xmin, xmax) = (0, WIDTH)
+(ymin, ymax) = (0, HEIGHT)
 
+maze = Maze(WIDTH, HEIGHT, keys, difficulty)
 # Define the start/goal states (x, y, theta)
 
 
@@ -64,7 +66,7 @@ class Visualization:
         plt.gca().set_aspect('equal')
 
         # Show the triangles.
-        for poly in filled_grids.context.geoms:
+        for poly in maze.wall_polys_prep.context.geoms:
             plt.plot(*poly.exterior.xy, 'k-', linewidth=2)
 
         # Show.
@@ -129,12 +131,12 @@ class Node:
         if (self.x <= xmin or self.x >= xmax or
             self.y <= ymin or self.y >= ymax):
             return False
-        return filled_grids.disjoint(Point(self.coordinates()))
+        return maze.disjoint(Point(self.coordinates()))
 
     # Check the local planner - whether this connects to another node.
     def connectsTo(self, other):
         line = LineString([self.coordinates(), other.coordinates()])
-        return filled_grids.disjoint(line)
+        return maze.disjoint(line)
 
 
 ######################################################################
@@ -257,14 +259,12 @@ def main():
 
 
     keylist = []
-    for _ in range(keys):
-        (key_x, key_y) = (random.uniform(xmin + 1, xmax - 1), random.uniform(ymin + 1, ymax - 1))
-        key = Node(key_x, key_y)
-        while not key.inFreespace():
-            (key_x, key_y) = (random.uniform(xmin + 1, xmax - 1), random.uniform(ymin + 1, ymax - 1))
-            key = Node(key_x, key_y)
-        keylist.append(key)
-        visual.drawNode(key, color='green', marker='o')
+    for key in maze.keys:
+        x, y = key
+        key_node = Node(x, y)
+        keylist.append(key_node)
+        visual.drawNode(key_node, color='green', marker='o')
+
 
     # Show the start/goal nodes.
     visual.drawNode(startnode, color='orange', marker='o')

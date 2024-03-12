@@ -13,7 +13,7 @@ from math               import pi, sin, cos, atan2, sqrt, ceil
 from scipy.spatial      import KDTree
 from shapely.geometry   import Point, LineString, Polygon, MultiPolygon
 from shapely.prepared   import prep
-from generators.maze_generator import generate_maze
+from generators.maze import Maze
 
 ######################################################################
 #
@@ -34,48 +34,12 @@ NMAX = 1500
 #
 #   List of obstacles/objects as well as the start/goal.
 #
-difficulty = 1
+WIDTH = 41
+HEIGHT = 41
 num_keys = 10
-(xmin, xmax) = (0, 41)
-(ymin, ymax) = (0, 41)
-generated_maze = generate_maze(xmax, ymax, num_keys)
-maze = generated_maze[0]
-keys = generated_maze[1]
-locks = generated_maze[2]
-start = generated_maze[3]
-end = generated_maze[4]
-
-key_list = []
-
-EMPTY = 0
-WALL = 1
-START = 2
-END = 3
-KEY = 4
-LOCK = 5
-
-# Collect all the triangle and prepare (for faster checking).
-
-polys = []
-lock_polys = []
-for i in range(xmax):
-    for j in range(ymax):
-        if maze[j, i] == 1 and random.random() < difficulty:
-            if (i - 1 >= 0) and maze[j, i - 1] == 1:
-                polys.append(Polygon([[i, j+0.45], [i+0.5, j+0.4], [i+0.5, j+0.55], [i, j+0.55]]))
-            if (i + 1 < xmax) and maze[j, i + 1] == 1:
-                polys.append(Polygon([[i + 0.5, j+0.45], [i+1, j+0.45], [i+1, j+0.55], [i+0.5, j+0.55]]))
-            if (j - 1 >= 0) and maze[j - 1, i] == 1:
-                polys.append(Polygon([[i+0.45, j], [i+0.45, j+0.5], [i+0.55,j+0.5], [i+0.55,j]]))
-            if (j + 1 < ymax) and maze[j + 1, i] == 1:
-                polys.append(Polygon([[i+0.45, j+0.5], [i+0.45, j+1], [i+0.55,j+1], [i+0.55,j+0.5]]))
-            
-        #fixws locked walls code.
-        elif maze[j, i] == LOCK:
-            lock_polys.append(Polygon([[i-0.5, j-0.5], [i-0.5, j+1.5], [i+1.5, j+1.5], [i+1.5, j-0.5]]))
-filled_grids = prep(MultiPolygon(polys))
-lock_polys = MultiPolygon(lock_polys)
-lock_polys_prep = prep(lock_polys)
+(xmin, xmax) = (0, WIDTH)
+(ymin, ymax) = (0, HEIGHT)
+maze = Maze(WIDTH, HEIGHT, num_keys, 0.8)
 
 # Define the start/goal states (x, y, theta)
 
@@ -99,10 +63,10 @@ class Visualization:
         plt.gca().set_aspect('equal')
 
         # Show the triangles.
-        for poly in filled_grids.context.geoms:
+        for poly in maze.wall_polys_prep.context.geoms:
             plt.plot(*poly.exterior.xy, 'k-', linewidth=2)
 
-        for poly in lock_polys_prep.context.geoms:
+        for poly in maze.lock_polys_prep.context.geoms:
             plt.plot(*poly.exterior.xy, 'c-', linewidth=2)
 
         # Show.
@@ -167,12 +131,12 @@ class Node:
         if (self.x <= xmin or self.x >= xmax or
             self.y <= ymin or self.y >= ymax):
             return False
-        return filled_grids.disjoint(Point(self.coordinates())) and lock_polys_prep.disjoint(Point(self.coordinates()))
+        return maze.disjoint(Point(self.coordinates()))
 
     # Check the local planner - whether this connects to another node.
     def connectsTo(self, other):
         line = LineString([self.coordinates(), other.coordinates()])
-        return filled_grids.disjoint(line) and lock_polys_prep.disjoint(line)
+        return maze.disjoint(line)
 
 
 ######################################################################
@@ -209,7 +173,7 @@ def est(startnode, goalnode, visual, keylist):
         distances = np.array([node.distance(goalnode) for node in tree])
 
         # Select the node from which to grow, which minimizes some metric.
-        scale = 5
+        scale = 1
         index = np.argmin(numnear + scale * distances)
         grownode = tree[index]
 
@@ -224,9 +188,9 @@ def est(startnode, goalnode, visual, keylist):
         # Find something nearby: keep looping until the tree grows.
         while True:
             # Pick the next node randomly.
-            angle = np.random.normal(heading, pi / 2)
+            angle = np.random.normal(heading, pi)
             # NOTE: To remove the grid movement, comment out the next line
-            angle = (angle // (pi / 2)) * (pi / 2)
+            angle = (angle // (pi / 8)) * (pi / 8)
             nextnode = Node(grownode.x + DSTEP * cos(angle), grownode.y + DSTEP * sin(angle))
 
             # Try to connect.
@@ -234,26 +198,26 @@ def est(startnode, goalnode, visual, keylist):
                 addtotree(grownode, nextnode)
                 break
 
-
         # Check if we can grab a key as well
-            for i in range(len(key_list)):
-                if nextnode.distance(key_list[i]) < DSTEP and nextnode.connectsTo(key_list[i]) and key_list[i] not in tree:
-                    addtotree(nextnode, key_list[i])
-                    keys_collected += 1
-                    visual.show()
-                    visual.drawNode(key_list[i], color='red', marker='o') # change key color when collected 
-                    key_list.remove(key_list[i])
-                    print("Key collected!")
-                    lock_polys = MultiPolygon([poly for idx, poly in enumerate(lock_polys.geoms) if idx != i])
-                    lock_polys_prep = prep(lock_polys)
-                    unlocked_poly = MultiPolygon([poly for idx, poly in enumerate(lock_polys.geoms) if idx == i])
-                    unlocked_poly_prep = prep(unlocked_poly)
-                    for unlock_poly in unlocked_poly_prep.context.geoms:
-                        plt.plot(*unlock_poly.exterior.xy, color='red', linewidth=2)
-                    break
+        for i in range(len(keylist)):
+            if nextnode.distance(keylist[i]) < DSTEP and nextnode.connectsTo(keylist[i]) and keylist[i] not in tree:
+                addtotree(nextnode, keylist[i])
+                keys_collected += 1
+                visual.show()
+                visual.drawNode(keylist[i], color='red', marker='o') # change key color when collected
+                keylist.remove(keylist[i])
+                print("Key collected!")
+                lock_polys = MultiPolygon([poly for idx, poly in enumerate(maze.lock_polys.geoms) if idx != i])
+                unlocked_poly = MultiPolygon([poly for idx, poly in enumerate(maze.lock_polys.geoms) if idx == i])
+                maze.set_lock_polys(lock_polys)
+
+                unlocked_poly_prep = prep(unlocked_poly)
+                for unlock_poly in unlocked_poly_prep.context.geoms:
+                    plt.plot(*unlock_poly.exterior.xy, color='red', linewidth=2)
+                break
 
         # Once grown, also check whether to connect to goal.
-        if nextnode.distance(goalnode) < DSTEP:
+        if nextnode.distance(goalnode) < DSTEP and nextnode.connectsTo(goalnode):
             addtotree(nextnode, goalnode)
             break
 
@@ -295,13 +259,15 @@ def main():
 
     # Create the start/goal nodes.
 
-    (xstart, ystart) = start
+    (xstart, ystart) = maze.get_start()
     startnode = Node(xstart, ystart)
 
-    (xgoal,  ygoal) = end
+    (xgoal,  ygoal) = maze.get_goal()
     goalnode  = Node(xgoal,  ygoal)
 
     # Generate and show keys
+    keys = maze.get_keys()
+    key_list = []
     for i in range(len(keys)):
         key_node = Node(keys[i][0], keys[i][1])
         key_list.append(key_node)

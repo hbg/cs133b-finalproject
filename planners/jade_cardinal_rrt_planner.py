@@ -13,7 +13,7 @@ from math               import pi, sin, cos, atan2, sqrt, ceil
 from scipy.spatial      import KDTree
 from shapely.geometry   import Point, LineString, Polygon, MultiPolygon
 from shapely.prepared   import prep
-from generators.maze_generator import generate_maze
+from generators.maze import Maze
 
 ######################################################################
 #
@@ -35,26 +35,12 @@ NMAX = 1500
 #   List of obstacles/objects as well as the start/goal.
 #
 difficulty = 1
-(xmin, xmax) = (0, 41)
-(ymin, ymax) = (0, 41)
-maze = generate_maze(xmax, ymax)
+WIDTH = 41
+HEIGHT = 41
+(xmin, xmax) = (0, WIDTH)
+(ymin, ymax) = (0, HEIGHT)
 keys = 4
-
-# Collect all the triangle and prepare (for faster checking).
-
-polys = []
-for i in range(xmax):
-    for j in range(ymax):
-        if maze[j, i] > 0 and random.random() < difficulty:
-            if (i - 1 >= 0) and maze[j, i - 1] > 0:
-                polys.append(Polygon([[i, j+0.45], [i+0.5, j+0.4], [i+0.5, j+0.55], [i, j+0.55]]))
-            if (i + 1 < xmax) and maze[j, i + 1] > 0:
-                polys.append(Polygon([[i + 0.5, j+0.45], [i+1, j+0.45], [i+1, j+0.55], [i+0.5, j+0.55]]))
-            if (j - 1 >= 0) and maze[j - 1, i] > 0:
-                polys.append(Polygon([[i+0.45, j], [i+0.45, j+0.5], [i+0.55,j+0.5], [i+0.55,j]]))
-            if (j + 1 < ymax) and maze[j + 1, i] > 0:
-                polys.append(Polygon([[i+0.45, j+0.5], [i+0.45, j+1], [i+0.55,j+1], [i+0.55,j+0.5]]))
-filled_grids = prep(MultiPolygon(polys))
+maze = Maze(WIDTH, HEIGHT, keys, difficulty)
 
 # Define the start/goal states (x, y, theta)
 
@@ -77,8 +63,7 @@ class Visualization:
         plt.gca().set_ylim(ymin, ymax)
         plt.gca().set_aspect('equal')
 
-        # Show the triangles.
-        for poly in filled_grids.context.geoms:
+        for poly in maze.wall_polys_prep.context.geoms:
             plt.plot(*poly.exterior.xy, 'k-', linewidth=2)
 
         # Show.
@@ -143,12 +128,12 @@ class Node:
         if (self.x <= xmin or self.x >= xmax or
             self.y <= ymin or self.y >= ymax):
             return False
-        return filled_grids.disjoint(Point(self.coordinates()))
+        return maze.disjoint(Point(self.coordinates()))
 
     # Check the local planner - whether this connects to another node.
     def connectsTo(self, other):
         line = LineString([self.coordinates(), other.coordinates()])
-        return filled_grids.disjoint(line)
+        return maze.disjoint(line)
 
 
 ######################################################################
@@ -254,26 +239,17 @@ def main():
 
     # Create the start/goal nodes.
 
-    (xstart, ystart) = (random.uniform(xmin + 1, xmax - 1), random.uniform(ymin + 1, ymax - 1))
+    (xstart, ystart) = maze.start
     startnode = Node(xstart, ystart)
-    while not startnode.inFreespace():
-        (xstart, ystart) = (random.uniform(xmin, xmax), random.uniform(ymin, ymax))
-        startnode = Node(xstart, ystart)
 
-    (xgoal,  ygoal)  = (random.uniform(xmin + 1, xmax - 1), random.uniform(ymin + 1, ymax - 1))
+    (xgoal,  ygoal)  = maze.goal
     goalnode  = Node(xgoal,  ygoal)
-    while not goalnode.inFreespace():
-        (xgoal,  ygoal)  = (random.uniform(xmin + 1, xmax - 1), random.uniform(ymin + 1, ymax - 1))
-        goalnode  = Node(xgoal,  ygoal)
 
     # Generate and show keys
     keylist = []
-    for _ in range(keys):
-        (key_x, key_y) = (random.uniform(xmin + 1, xmax - 1), random.uniform(ymin + 1, ymax - 1))
+    for i in range(keys):
+        (key_x, key_y) = maze.keys[i]
         key = Node(key_x, key_y)
-        while not key.inFreespace():
-            (key_x, key_y) = (random.uniform(xmin + 1, xmax - 1), random.uniform(ymin + 1, ymax - 1))
-            key = Node(key_x, key_y)
         keylist.append(key)
         visual.drawNode(key, color='green', marker='o')
 
