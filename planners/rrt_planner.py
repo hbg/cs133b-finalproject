@@ -13,7 +13,7 @@ from math               import pi, sin, cos, atan2, sqrt, ceil
 from scipy.spatial      import KDTree
 from shapely.geometry   import Point, LineString, Polygon, MultiPolygon
 from shapely.prepared   import prep
-from generators.maze_generator import generate_maze_polygons
+from generators.maze_generator import generate_maze
 
 ######################################################################
 #
@@ -21,7 +21,7 @@ from generators.maze_generator import generate_maze_polygons
 #
 #   Define the step size.  Also set the maximum number of nodes.
 #
-DSTEP = 1
+DSTEP = 1.5
 
 # Maximum number of steps (attempts) or nodes (successful steps).
 SMAX = 500000
@@ -34,11 +34,48 @@ NMAX = 1500
 #
 #   List of obstacles/objects as well as the start/goal.
 #
-difficulty = 0.7
+difficulty = 1
+num_keys = 10
 (xmin, xmax) = (0, 41)
 (ymin, ymax) = (0, 41)
+generated_maze = generate_maze(xmax, ymax, num_keys)
+maze = generated_maze[0]
+keys = generated_maze[1]
+locks = generated_maze[2]
+start = generated_maze[3]
+end = generated_maze[4]
 
-filled_grids = generate_maze_polygons(41, 41, difficulty)
+key_list = []
+
+EMPTY = 0
+WALL = 1
+START = 2
+END = 3
+KEY = 4
+LOCK = 5
+
+# Collect all the triangle and prepare (for faster checking).
+
+polys = []
+lock_polys = []
+for i in range(xmax):
+    for j in range(ymax):
+        if maze[j, i] == 1 and random.random() < difficulty:
+            if (i - 1 >= 0) and maze[j, i - 1] == 1:
+                polys.append(Polygon([[i, j+0.45], [i+0.5, j+0.4], [i+0.5, j+0.55], [i, j+0.55]]))
+            if (i + 1 < xmax) and maze[j, i + 1] == 1:
+                polys.append(Polygon([[i + 0.5, j+0.45], [i+1, j+0.45], [i+1, j+0.55], [i+0.5, j+0.55]]))
+            if (j - 1 >= 0) and maze[j - 1, i] == 1:
+                polys.append(Polygon([[i+0.45, j], [i+0.45, j+0.5], [i+0.55,j+0.5], [i+0.55,j]]))
+            if (j + 1 < ymax) and maze[j + 1, i] == 1:
+                polys.append(Polygon([[i+0.45, j+0.5], [i+0.45, j+1], [i+0.55,j+1], [i+0.55,j+0.5]]))
+            
+        #fixws locked walls code.
+        elif maze[j, i] == LOCK:
+            lock_polys.append(Polygon([[i-0.5, j-0.5], [i-0.5, j+1.5], [i+1.5, j+1.5], [i+1.5, j-0.5]]))
+filled_grids = prep(MultiPolygon(polys))
+lock_polys = MultiPolygon(lock_polys)
+lock_polys_prep = prep(lock_polys)
 
 # Define the start/goal states (x, y, theta)
 
@@ -64,6 +101,9 @@ class Visualization:
         # Show the triangles.
         for poly in filled_grids.context.geoms:
             plt.plot(*poly.exterior.xy, 'k-', linewidth=2)
+
+        for poly in lock_polys_prep.context.geoms:
+            plt.plot(*poly.exterior.xy, 'c-', linewidth=2)
 
         # Show.
         self.show()
@@ -127,19 +167,21 @@ class Node:
         if (self.x <= xmin or self.x >= xmax or
             self.y <= ymin or self.y >= ymax):
             return False
-        return filled_grids.disjoint(Point(self.coordinates()))
+        return filled_grids.disjoint(Point(self.coordinates())) and lock_polys_prep.disjoint(Point(self.coordinates()))
 
     # Check the local planner - whether this connects to another node.
     def connectsTo(self, other):
         line = LineString([self.coordinates(), other.coordinates()])
-        return filled_grids.disjoint(line)
+        return filled_grids.disjoint(line) and lock_polys_prep.disjoint(line)
 
 
 ######################################################################
 #
 #   RRT Functions
 #
-def rrt(startnode, goalnode, visual):
+def rrt(startnode, goalnode, visual, keylist):
+    global lock_polys
+    global lock_polys_prep
     # Start the tree with the startnode (set no parent just in case).
     startnode.parent = None
     tree = [startnode]
@@ -155,17 +197,23 @@ def rrt(startnode, goalnode, visual):
     # Loop - keep growing the tree.
     steps = 0
     P = 0.05
+    keys_collected = 0
+    current_node = startnode
     while True:
         # Determine the target state.
         if random.random() <= P:
             targetnode = goalnode
         else:
-            targetnode = Node(random.uniform(0, 41), random.uniform(0, 41))
+            if random.random() < 0.5:
+                targetnode = Node(random.uniform(0, 41), current_node.y)
+            else:
+                targetnode = Node(current_node.x, random.uniform(0, 41))
 
         # Directly determine the distances to the target node.
         distances = np.array([node.distance(targetnode) for node in tree])
         index     = np.argmin(distances)
         nearnode  = tree[index]
+        current_node = nearnode
         d         = distances[index]
 
         # Determine the next node.
@@ -182,6 +230,22 @@ def rrt(startnode, goalnode, visual):
                 addtotree(nextnode, goalnode)
                 break
 
+            # Check if we can grab a key as well
+            for i in range(len(key_list)):
+                if nextnode.distance(key_list[i]) < DSTEP and nextnode.connectsTo(key_list[i]) and key_list[i] not in tree:
+                    addtotree(nextnode, key_list[i])
+                    keys_collected += 1
+                    visual.show()
+                    visual.drawNode(key_list[i], color='red', marker='o') # change key color when collected 
+                    key_list.remove(key_list[i])
+                    print("Key collected!")
+                    lock_polys = MultiPolygon([poly for idx, poly in enumerate(lock_polys.geoms) if idx != i])
+                    lock_polys_prep = prep(lock_polys)
+                    unlocked_poly = MultiPolygon([poly for idx, poly in enumerate(lock_polys.geoms) if idx == i])
+                    unlocked_poly_prep = prep(unlocked_poly)
+                    for unlock_poly in unlocked_poly_prep.context.geoms:
+                        plt.plot(*unlock_poly.exterior.xy, color='red', linewidth=2)
+                    break
         # Check whether we should abort - too many steps or nodes.
         steps += 1
         if (steps >= SMAX) or (len(tree) >= NMAX):
@@ -223,17 +287,18 @@ def main():
 
     # Create the start/goal nodes.
 
-    (xstart, ystart) = (random.uniform(xmin, xmax), random.uniform(ymin, ymax))
+    (xstart, ystart) = start
     startnode = Node(xstart, ystart)
-    while not startnode.inFreespace():
-        (xstart, ystart) = (random.uniform(xmin, xmax), random.uniform(ymin, ymax))
-        startnode = Node(xstart, ystart)
 
-    (xgoal,  ygoal)  = (random.uniform(xmin, xmax), random.uniform(ymin, ymax))
+    (xgoal,  ygoal) = end
     goalnode  = Node(xgoal,  ygoal)
-    while not goalnode.inFreespace():
-        (xgoal,  ygoal)  = (random.uniform(xmin, xmax), random.uniform(ymin, ymax))
-        goalnode  = Node(xgoal,  ygoal)
+
+    # Generate and show keys
+    for i in range(len(keys)):
+        key_node = Node(keys[i][0], keys[i][1])
+        key_list.append(key_node)
+        visual.drawNode(key_node, color='green', marker='o')
+
 
     # Show the start/goal nodes.
     visual.drawNode(startnode, color='orange', marker='o')
@@ -243,7 +308,7 @@ def main():
 
     # Run the RRT planner.
     print("Running RRT...")
-    path = rrt(startnode, goalnode, visual)
+    path = rrt(startnode, goalnode, visual, key_list)
 
     # If unable to connect, just note before closing.
     if not path:
