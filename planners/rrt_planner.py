@@ -146,8 +146,6 @@ class Node:
 #   RRT Functions
 #
 def rrt(startnode, goalnode, visual, keylist):
-    global lock_polys
-    global lock_polys_prep
     # Start the tree with the startnode (set no parent just in case).
     startnode.parent = None
     tree = [startnode]
@@ -210,15 +208,15 @@ def rrt(startnode, goalnode, visual, keylist):
             unlocked_poly = MultiPolygon([poly for idx, poly in enumerate(maze.lock_polys.geoms) if idx in deleted_indices])
             maze.set_lock_polys(lock_polys)
 
+            unlocked_poly_prep = prep(unlocked_poly)
+            for unlock_poly in unlocked_poly_prep.context.geoms:
+                plt.plot(*unlock_poly.exterior.xy, color='red', linewidth=2)
+
         new_key_list = []
         for i, elem in enumerate(keylist):
             if i not in deleted_indices:
                 new_key_list.append(elem)
         keylist = new_key_list
-
-        unlocked_poly_prep = prep(unlocked_poly)
-        for unlock_poly in unlocked_poly_prep.context.geoms:
-            plt.plot(*unlock_poly.exterior.xy, color='red', linewidth=2)
 
         # Check whether we should abort - too many steps or nodes.
         steps += 1

@@ -39,7 +39,7 @@ WIDTH = 41
 HEIGHT = 41
 (xmin, xmax) = (0, WIDTH)
 (ymin, ymax) = (0, HEIGHT)
-keys = 4
+keys = 10
 maze = Maze(WIDTH, HEIGHT, keys, difficulty)
 
 # Define the start/goal states (x, y, theta)
@@ -65,6 +65,9 @@ class Visualization:
 
         for poly in maze.wall_polys_prep.context.geoms:
             plt.plot(*poly.exterior.xy, 'k-', linewidth=2)
+
+        for poly in maze.lock_polys_prep.context.geoms:
+            plt.plot(*poly.exterior.xy, 'c-', linewidth=2)
 
         # Show.
         self.show()
@@ -190,13 +193,28 @@ def rrt(startnode, goalnode, visual, keylist):
                 break
 
             # Check if we can grab a key as well
-            for i in range(keys):
-                if nextnode.distance(keylist[i]) < DSTEP and nextnode.connectsTo(keylist[i]) and keylist[i] not in tree:
+            deleted_indices =set()
+            for i in range(len(keylist)):
+                if nextnode.distance(keylist[i]) < DSTEP and nextnode.connectsTo(keylist[i]):
+                    deleted_indices.add(i)
                     addtotree(nextnode, keylist[i])
                     keys_collected += 1
-                    print("Key collected!", keys_collected, "key(s) have been collected")
+                    visual.show()
+                    visual.drawNode(keylist[i], color='red', marker='o') # change key color when collected
+                    print("Key collected!")
+            lock_polys = MultiPolygon([poly for idx, poly in enumerate(maze.lock_polys.geoms) if idx not in deleted_indices])
+            unlocked_poly = MultiPolygon([poly for idx, poly in enumerate(maze.lock_polys.geoms) if idx in deleted_indices])
+            maze.set_lock_polys(lock_polys)
 
+            unlocked_poly_prep = prep(unlocked_poly)
+            for unlock_poly in unlocked_poly_prep.context.geoms:
+                plt.plot(*unlock_poly.exterior.xy, color='red', linewidth=2)
 
+        new_key_list = []
+        for i, elem in enumerate(keylist):
+            if i not in deleted_indices:
+                new_key_list.append(elem)
+        keylist = new_key_list
 
         # Check whether we should abort - too many steps or nodes.
         steps += 1
@@ -249,7 +267,7 @@ def main():
     keylist = []
     for i in range(keys):
         (key_x, key_y) = maze.keys[i]
-        key = Node(key_x, key_y)
+        key = Node(key_x + 0.5, key_y + 0.5)
         keylist.append(key)
         visual.drawNode(key, color='green', marker='o')
 
