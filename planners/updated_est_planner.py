@@ -39,7 +39,7 @@ HEIGHT = 41
 num_keys = 10
 (xmin, xmax) = (0, WIDTH)
 (ymin, ymax) = (0, HEIGHT)
-maze = Maze(WIDTH, HEIGHT, num_keys, 0.8)
+maze = Maze(WIDTH, HEIGHT, num_keys, 1.)
 
 # Define the start/goal states (x, y, theta)
 
@@ -158,23 +158,29 @@ def est(startnode, goalnode, visual, keylist):
         visual.drawEdge(oldnode, newnode, color='g', linewidth=1)
         visual.show()
 
-    P = 0.05
+    P = 0.15
     keys_collected = 0
     # Loop - keep growing the tree.
     while True:
         # Determine the local density by the number of nodes nearby.
         # KDTree uses the coordinates to compute the Euclidean distance.
         # It returns a NumPy array, same length as nodes in the tree.
+        dstep = DSTEP
+        if random.random() < P and len(tree) > 1:
+            sample = random.choice(tree)
+            tree.remove(sample)
         X = np.array([node.coordinates() for node in tree])
         kdtree  = KDTree(X)
-        numnear = kdtree.query_ball_point(X, r=1.5*DSTEP, return_length=True)
+        numnear = kdtree.query_ball_point(X, r=1.5*dstep, return_length=True)
 
         # Directly determine the distances to the goal node.
         distances = np.array([node.distance(goalnode) for node in tree])
+        distances_to_keys = np.array([sum([node.distance(key) for key in keylist]) / len(keylist) for node in tree])
 
         # Select the node from which to grow, which minimizes some metric.
-        scale = 1
-        index = np.argmin(numnear + scale * distances)
+        scale1 = 2
+        scale2 = 3
+        index = np.argmin(numnear + scale2 * distances + scale1 * distances_to_keys)
         grownode = tree[index]
 
 
@@ -186,13 +192,17 @@ def est(startnode, goalnode, visual, keylist):
                             grownode.x - grownode.parent.x)
 
         # Find something nearby: keep looping until the tree grows.
+        attempts = 0
         while True:
             # Pick the next node randomly.
             angle = np.random.normal(heading, pi)
             # NOTE: To remove the grid movement, comment out the next line
-            angle = (angle // (pi / 8)) * (pi / 8)
-            nextnode = Node(grownode.x + DSTEP * cos(angle), grownode.y + DSTEP * sin(angle))
-
+            angle = (angle // (pi / 4)) * (pi / 4)
+            nextnode = Node(grownode.x + dstep * cos(angle), grownode.y + dstep * sin(angle))
+            attempts += 1
+            if attempts > 10:
+                tree.remove(grownode)
+                break
             # Try to connect.
             if grownode.connectsTo(nextnode) and nextnode.inFreespace():
                 addtotree(grownode, nextnode)
@@ -200,7 +210,7 @@ def est(startnode, goalnode, visual, keylist):
 
         # Check if we can grab a key as well
         for i in range(len(keylist)):
-            if nextnode.distance(keylist[i]) < DSTEP and nextnode.connectsTo(keylist[i]) and keylist[i] not in tree:
+            if nextnode.distance(keylist[i]) < DSTEP and nextnode.connectsTo(keylist[i]):
                 addtotree(nextnode, keylist[i])
                 keys_collected += 1
                 visual.show()
@@ -269,7 +279,7 @@ def main():
     keys = maze.get_keys()
     key_list = []
     for i in range(len(keys)):
-        key_node = Node(keys[i][0], keys[i][1])
+        key_node = Node(keys[i][0] + 0.5, keys[i][1] + 0.5)
         key_list.append(key_node)
         visual.drawNode(key_node, color='green', marker='o')
 

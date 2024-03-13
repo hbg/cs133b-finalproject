@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from shapely.geometry import MultiPolygon, Polygon
 from shapely.prepared import prep
+import copy
 
 EMPTY = 0
 WALL = 1
@@ -52,27 +53,19 @@ def is_solvable(grid, queue, keys, locks, width, height):
         start_x, start_y = queue.pop(0)
         if grid[start_y, start_x] == END:
             return True
-
-        visited.add((start_x, start_y))
-        for dx, dy in directions:
-            new_x, new_y = start_x + dx, start_y + dy
-            if new_x >= 0 and new_x < width and new_y >= 0 and new_y < height and (new_x, new_y) not in visited:
-                cell = grid[new_y][new_x]
-                if cell == END:
-                    return True
-                elif cell == KEY:
-                    remove_key_and_lock(grid, keys, locks, keys.index((new_x, new_y)))
-                    queue.append((new_x, new_y))
-                elif cell == EMPTY:
-                    queue.append((new_x, new_y))
-                elif cell == LOCK:
-                    all_locks = True
-                    for x, y in queue:
-                        if grid[y][x] != LOCK:
-                            queue.append((new_x, new_y))
-                            all_locks = False
-                    if all_locks:
-                        return False
+        if (start_x, start_y) not in visited:
+            visited.add((start_x, start_y))
+            for dx, dy in directions:
+                new_x, new_y = start_x + dx, start_y + dy
+                if new_x >= 0 and new_x < width and new_y >= 0 and new_y < height:
+                    cell = grid[new_y][new_x]
+                    if cell == END:
+                        return True
+                    elif cell == KEY:
+                        remove_key_and_lock(grid, keys, locks, keys.index((new_x, new_y)))
+                        queue.append((new_x, new_y))
+                    elif cell == EMPTY:
+                        queue.append((new_x, new_y))
     return False
 
 def generate_maze(width, height):
@@ -194,7 +187,7 @@ def generate_maze_with_keys(width, height, num_keys):
 
     print(keys, locks)
 
-    if is_solvable(grid.copy(), [(start_x, start_y)], keys, locks, width, height):
+    if is_solvable(copy.deepcopy(grid), [(start_x, start_y)], keys, locks, width, height):
         return (grid, keys, locks, (start_x, start_y), (end_x, end_y))
     else:
         print('generating new maze.')
@@ -205,25 +198,32 @@ def maze_to_polygons(maze, difficulty):
     width = len(maze[0])
     polys = []
     maze = generate_maze(width, height)
+
     for i in range(width):
         for j in range(height):
             x_border_dist = min(i, width - i)
             y_border_dist = min(j, height - j)
-            if maze[j, i] > 0:
-                if (x_border_dist <= 2 or y_border_dist <= 2) or \
-                      random.random() < difficulty:
-                    if (i - 1 >= 0) and maze[j, i - 1] == 1:
-                        polys.append(Polygon([[i, j+0.45], [i+0.5, j+0.4],
-                                              [i+0.5, j+0.55], [i, j+0.55]]))
-                    if (i + 1 < width) and maze[j, i + 1] == 1:
-                        polys.append(Polygon([[i + 0.5, j+0.45], [i+1, j+0.45],
-                                              [i+1, j+0.55], [i+0.5, j+0.55]]))
-                    if (j - 1 >= 0) and maze[j - 1, i] == 1:
-                        polys.append(Polygon([[i+0.45, j], [i+0.45, j+0.5],
-                                              [i+0.55,j+0.5], [i+0.55,j]]))
-                    if (j + 1 < height) and maze[j + 1, i] == 1:
-                        polys.append(Polygon([[i+0.45, j+0.5], [i+0.45, j+1],
-                                              [i+0.55,j+1], [i+0.55,j+0.5]]))
+            if (x_border_dist >= 2 and y_border_dist >= 2):
+                if random.random() > difficulty:
+                    maze[j, i] = 0
+
+    for i in range(width):
+        for j in range(height):
+            x_border_dist = min(i, width - i)
+            y_border_dist = min(j, height - j)
+            if maze[j, i] == WALL:
+                if (i - 1 >= 0) and maze[j, i - 1] == 1:
+                    polys.append(Polygon([[i, j+0.45], [i+0.5, j+0.45],
+                                            [i+0.5, j+0.55], [i, j+0.55]]))
+                if (i + 1 < width) and maze[j, i + 1] == 1:
+                    polys.append(Polygon([[i + 0.5, j+0.45], [i+1, j+0.45],
+                                            [i+1, j+0.55], [i+0.5, j+0.55]]))
+                if (j - 1 >= 0) and maze[j - 1, i] == 1:
+                    polys.append(Polygon([[i+0.45, j], [i+0.45, j+0.5],
+                                            [i+0.55,j+0.5], [i+0.55,j]]))
+                if (j + 1 < height) and maze[j + 1, i] == 1:
+                    polys.append(Polygon([[i+0.45, j+0.5], [i+0.45, j+1],
+                                            [i+0.55,j+1], [i+0.55,j+0.5]]))
     filled_grids = MultiPolygon(polys)
     return filled_grids
 

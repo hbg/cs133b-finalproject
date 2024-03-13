@@ -11,7 +11,7 @@ class Maze:
         self.wall_polys = maze_to_polygons(self.maze, difficulty)
         self.lock_polys = []
         for (i, j) in self.locks:
-            self.lock_polys.append(Polygon([[i, j], [i, j+1], [i+1, j+1], [i+1, j]]))
+            self.lock_polys.append(Polygon([[i - 1, j - 1], [i + 1, j - 1], [i+1, j+1], [i - 1, j+1]]))
         self.lock_polys = MultiPolygon(self.lock_polys)
         self.wall_polys_prep = prep(self.wall_polys)
         self.lock_polys_prep = prep(self.lock_polys)
