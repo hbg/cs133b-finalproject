@@ -193,7 +193,7 @@ def rrt(startnode, goalnode, visual, keylist):
                 break
 
             # Check if we can grab a key as well
-            deleted_indices =set()
+            deleted_indices = set()
             for i in range(len(keylist)):
                 if nextnode.distance(keylist[i]) < DSTEP and nextnode.connectsTo(keylist[i]):
                     deleted_indices.add(i)
@@ -210,11 +210,11 @@ def rrt(startnode, goalnode, visual, keylist):
             for unlock_poly in unlocked_poly_prep.context.geoms:
                 plt.plot(*unlock_poly.exterior.xy, color='red', linewidth=2)
 
-        new_key_list = []
-        for i, elem in enumerate(keylist):
-            if i not in deleted_indices:
-                new_key_list.append(elem)
-        keylist = new_key_list
+            new_key_list = []
+            for i, elem in enumerate(keylist):
+                if i not in deleted_indices:
+                    new_key_list.append(elem)
+            keylist = new_key_list
 
         # Check whether we should abort - too many steps or nodes.
         steps += 1

@@ -13,7 +13,7 @@ from math               import pi, sin, cos, atan2, sqrt, ceil
 from scipy.spatial      import KDTree
 from shapely.geometry   import Point, LineString, Polygon, MultiPolygon
 from shapely.prepared   import prep
-from generators.maze_generator import generate_maze_polygons
+from generators.maze import Maze
 
 ######################################################################
 #
@@ -34,10 +34,13 @@ NMAX = 1500
 #
 #   List of obstacles/objects as well as the start/goal.
 #
-difficulty = .5
-(xmin, xmax) = (0, 41)
-(ymin, ymax) = (0, 41)
-filled_grids = generate_maze_polygons(41, 41, difficulty)
+difficulty = 1.0
+num_keys = 10
+WIDTH = 41
+HEIGHT = 41
+(xmin, xmax) = (0, WIDTH)
+(ymin, ymax) = (0, HEIGHT)
+maze = Maze(WIDTH, HEIGHT, num_keys, difficulty)
 
 # Collect all the triangle and prepare (for faster checking).
 
@@ -63,9 +66,11 @@ class Visualization:
         plt.gca().set_ylim(ymin, ymax)
         plt.gca().set_aspect('equal')
 
-        # Show the triangles.
-        for poly in filled_grids.context.geoms:
+        for poly in maze.wall_polys_prep.context.geoms:
             plt.plot(*poly.exterior.xy, 'k-', linewidth=2)
+
+        for poly in maze.lock_polys_prep.context.geoms:
+            plt.plot(*poly.exterior.xy, 'c-', linewidth=2)
 
         # Show.
         self.show()
@@ -133,19 +138,19 @@ class Node:
         if (self.x <= xmin or self.x >= xmax or
             self.y <= ymin or self.y >= ymax):
             return False
-        return filled_grids.disjoint(Point(self.coordinates()))
+        return maze.disjoint(Point(self.coordinates()))
 
     # Check the local planner - whether this connects to another node.
     def connectsTo(self, other):
         line = LineString([self.coordinates(), other.coordinates()])
-        return filled_grids.disjoint(line)
+        return maze.disjoint(line)
 
 
 ######################################################################
 #
 #   RRT Functions
 #
-def rrt(startnode, goalnode, visual):
+def rrt(startnode, goalnode, visual, keylist):
     # Start the tree with the startnode (set no parent just in case).
     startnode.parent = None
     tree = [startnode]
@@ -162,6 +167,7 @@ def rrt(startnode, goalnode, visual):
     steps = 0
     found_goal = False
     P = 0.05
+    keys_collected = 0
     while not found_goal:
         # Directly determine the distances to the goal node.
         if np.random.random() < P:
@@ -205,6 +211,31 @@ def rrt(startnode, goalnode, visual):
                 if nextnode.distance(goalnode) < DSTEP and nextnode.connectsTo(goalnode):
                     addtotree(nextnode, goalnode)
                     found_goal = True
+
+
+                # Check if we can grab a key as well
+                deleted_indices =set()
+                for i in range(len(keylist)):
+                    if nextnode.distance(keylist[i]) < DSTEP and nextnode.connectsTo(keylist[i]):
+                        deleted_indices.add(i)
+                        addtotree(nextnode, keylist[i])
+                        keys_collected += 1
+                        visual.show()
+                        visual.drawNode(keylist[i], color='red', marker='o') # change key color when collected
+                        print("Key collected!")
+                lock_polys = MultiPolygon([poly for idx, poly in enumerate(maze.lock_polys.geoms) if idx not in deleted_indices])
+                unlocked_poly = MultiPolygon([poly for idx, poly in enumerate(maze.lock_polys.geoms) if idx in deleted_indices])
+                maze.set_lock_polys(lock_polys)
+
+                unlocked_poly_prep = prep(unlocked_poly)
+                for unlock_poly in unlocked_poly_prep.context.geoms:
+                    plt.plot(*unlock_poly.exterior.xy, color='red', linewidth=2)
+
+                new_key_list = []
+                for i, elem in enumerate(keylist):
+                    if i not in deleted_indices:
+                        new_key_list.append(elem)
+                keylist = new_key_list
         else:
             del tree[index]
 
@@ -249,17 +280,20 @@ def main():
 
     # Create the start/goal nodes.
 
-    (xstart, ystart) = (random.uniform(xmin, xmax), random.uniform(ymin, ymax))
+    (xstart, ystart) = maze.get_start()
     startnode = Node(xstart, ystart)
-    while not startnode.inFreespace():
-        (xstart, ystart) = (random.uniform(xmin, xmax), random.uniform(ymin, ymax))
-        startnode = Node(xstart, ystart)
 
-    (xgoal,  ygoal)  = (random.uniform(xmin, xmax), random.uniform(ymin, ymax))
+    (xgoal,  ygoal)  = maze.get_goal()
     goalnode  = Node(xgoal,  ygoal)
-    while not goalnode.inFreespace():
-        (xgoal,  ygoal)  = (random.uniform(xmin, xmax), random.uniform(ymin, ymax))
-        goalnode  = Node(xgoal,  ygoal)
+
+
+    # Generate and show keys
+    keylist = []
+    for i in range(num_keys):
+        (key_x, key_y) = maze.keys[i]
+        key = Node(key_x + 0.5, key_y + 0.5)
+        keylist.append(key)
+        visual.drawNode(key, color='green', marker='o')
 
     # Show the start/goal nodes.
     visual.drawNode(startnode, color='orange', marker='o')
@@ -269,7 +303,7 @@ def main():
 
     # Run the RRT planner.
     print("Running RRT...")
-    path = rrt(startnode, goalnode, visual)
+    path = rrt(startnode, goalnode, visual, keylist)
 
     # If unable to connect, just note before closing.
     if not path:
