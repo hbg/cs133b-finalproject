@@ -166,8 +166,8 @@ def est(startnode, goalnode, visual, keylist):
         # KDTree uses the coordinates to compute the Euclidean distance.
         # It returns a NumPy array, same length as nodes in the tree.
         dstep = DSTEP
-        if random.random() < P and len(tree) > 1:
-            sample = random.choice(tree)
+        if np.random.random() < P and len(tree) > 1:
+            sample = np.random.choice(tree)
             tree.remove(sample)
         X = np.array([node.coordinates() for node in tree])
         kdtree  = KDTree(X)
@@ -197,7 +197,7 @@ def est(startnode, goalnode, visual, keylist):
             # Pick the next node randomly.
             angle = np.random.normal(heading, pi)
             # NOTE: To remove the grid movement, comment out the next line
-            angle = (angle // (pi / 4)) * (pi / 4)
+            # angle = (angle // (pi / 4)) * (pi / 4)
             nextnode = Node(grownode.x + dstep * cos(angle), grownode.y + dstep * sin(angle))
             attempts += 1
             if attempts > 10:
@@ -209,22 +209,28 @@ def est(startnode, goalnode, visual, keylist):
                 break
 
         # Check if we can grab a key as well
+        deleted_indices =set()
         for i in range(len(keylist)):
             if nextnode.distance(keylist[i]) < DSTEP and nextnode.connectsTo(keylist[i]):
+                deleted_indices.add(i)
                 addtotree(nextnode, keylist[i])
                 keys_collected += 1
                 visual.show()
                 visual.drawNode(keylist[i], color='red', marker='o') # change key color when collected
-                keylist.remove(keylist[i])
                 print("Key collected!")
-                lock_polys = MultiPolygon([poly for idx, poly in enumerate(maze.lock_polys.geoms) if idx != i])
-                unlocked_poly = MultiPolygon([poly for idx, poly in enumerate(maze.lock_polys.geoms) if idx == i])
-                maze.set_lock_polys(lock_polys)
+        lock_polys = MultiPolygon([poly for idx, poly in enumerate(maze.lock_polys.geoms) if idx not in deleted_indices])
+        unlocked_poly = MultiPolygon([poly for idx, poly in enumerate(maze.lock_polys.geoms) if idx in deleted_indices])
+        maze.set_lock_polys(lock_polys)
 
-                unlocked_poly_prep = prep(unlocked_poly)
-                for unlock_poly in unlocked_poly_prep.context.geoms:
-                    plt.plot(*unlock_poly.exterior.xy, color='red', linewidth=2)
-                break
+        new_key_list = []
+        for i, elem in enumerate(keylist):
+            if i not in deleted_indices:
+                new_key_list.append(elem)
+        keylist = new_key_list
+
+        unlocked_poly_prep = prep(unlocked_poly)
+        for unlock_poly in unlocked_poly_prep.context.geoms:
+            plt.plot(*unlock_poly.exterior.xy, color='red', linewidth=2)
 
         # Once grown, also check whether to connect to goal.
         if nextnode.distance(goalnode) < DSTEP and nextnode.connectsTo(goalnode):

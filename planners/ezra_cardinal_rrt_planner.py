@@ -69,7 +69,7 @@ for i in range(xmax):
                 polys.append(Polygon([[i+0.45, j], [i+0.45, j+0.5], [i+0.55,j+0.5], [i+0.55,j]]))
             if (j + 1 < ymax) and maze[j + 1, i] == 1:
                 polys.append(Polygon([[i+0.45, j+0.5], [i+0.45, j+1], [i+0.55,j+1], [i+0.55,j+0.5]]))
-            
+
         # TODO: fix locked walls code.
         elif maze[j, i] == LOCK:
             lock_polys.append(Polygon([[i, j], [i, j+1], [i+1, j+1], [i+1, j]]))
@@ -201,10 +201,10 @@ def rrt(startnode, goalnode, visual, keylist):
     current_node = startnode
     while True:
         # Determine the target state.
-        if random.random() <= P:
+        if np.random.random() <= P:
             targetnode = goalnode
         else:
-            if random.random() < 0.5:
+            if np.random.random() < 0.5:
                 targetnode = Node(random.uniform(0, 41), current_node.y)
             else:
                 targetnode = Node(current_node.x, random.uniform(0, 41))

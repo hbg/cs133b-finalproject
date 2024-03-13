@@ -1,6 +1,7 @@
 from generators.maze_generator import generate_maze_with_keys, maze_to_polygons
 from shapely.geometry import MultiPolygon, Polygon
 from shapely.prepared import prep
+import numpy as np
 
 class Maze:
     def __init__(self, width, height, num_keys, difficulty=1.0):

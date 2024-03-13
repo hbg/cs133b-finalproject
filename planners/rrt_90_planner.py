@@ -164,7 +164,7 @@ def rrt(startnode, goalnode, visual):
     P = 0.05
     while not found_goal:
         # Directly determine the distances to the goal node.
-        if random.random() < P:
+        if np.random.random() < P:
             targetnode = goalnode
         else:
             targetnode = None

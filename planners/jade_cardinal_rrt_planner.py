@@ -160,10 +160,10 @@ def rrt(startnode, goalnode, visual, keylist):
     current_node = startnode
     while True:
         # Determine the target state.
-        if random.random() <= P:
+        if np.random.random() <= P:
             targetnode = goalnode
         else:
-            if random.random() < 0.5:
+            if np.random.random() < 0.5:
                 targetnode = Node(random.uniform(0, 41), current_node.y)
             else:
                 targetnode = Node(current_node.x, random.uniform(0, 41))
