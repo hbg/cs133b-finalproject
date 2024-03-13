@@ -36,8 +36,8 @@ NMAX = 1500
 #
 difficulty = 1.0
 num_keys = 20
-WIDTH = 51
-HEIGHT = 51
+WIDTH = 41
+HEIGHT = 41
 (xmin, xmax) = (0, WIDTH)
 (ymin, ymax) = (0, HEIGHT)
 np.random.seed(2)
