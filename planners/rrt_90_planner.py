@@ -35,11 +35,12 @@ NMAX = 1500
 #   List of obstacles/objects as well as the start/goal.
 #
 difficulty = 1.0
-num_keys = 10
-WIDTH = 41
-HEIGHT = 41
+num_keys = 20
+WIDTH = 51
+HEIGHT = 51
 (xmin, xmax) = (0, WIDTH)
 (ymin, ymax) = (0, HEIGHT)
+np.random.seed(2)
 maze = Maze(WIDTH, HEIGHT, num_keys, difficulty)
 
 # Collect all the triangle and prepare (for faster checking).
@@ -186,7 +187,7 @@ def rrt(startnode, goalnode, visual, keylist):
         d         = distances[index]
 
         if len(nearnode.directions) != 0:
-            direction = random.choice(nearnode.directions)
+            direction = np.random.choice(nearnode.directions)
             if direction == 'left':
                 nextnode = Node(nearnode.x - DSTEP, nearnode.y)
                 nextnode.directions.remove('right')

@@ -40,6 +40,8 @@ WIDTH = 41
 HEIGHT = 41
 (xmin, xmax) = (0, WIDTH)
 (ymin, ymax) = (0, HEIGHT)
+
+np.random.seed(2)
 maze = Maze(WIDTH, HEIGHT, num_keys, difficulty)
 
 
@@ -64,7 +66,6 @@ class Visualization:
         plt.gca().set_ylim(ymin, ymax)
         plt.gca().set_aspect('equal')
 
-        # Show the triangles.
         for poly in maze.wall_polys_prep.context.geoms:
             plt.plot(*poly.exterior.xy, 'k-', linewidth=2)
 

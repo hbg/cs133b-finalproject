@@ -40,6 +40,8 @@ WIDTH = 41
 HEIGHT = 41
 (xmin, xmax) = (0, 41)
 (ymin, ymax) = (0, 41)
+
+np.random.seed(2)
 maze = Maze(WIDTH, HEIGHT, num_keys, difficulty)
 
 # Define the start/goal states (x, y, theta)

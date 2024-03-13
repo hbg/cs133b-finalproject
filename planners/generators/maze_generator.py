@@ -124,7 +124,6 @@ def generate_maze_polygons(width, height, difficulty):
     return filled_grids
 
 def generate_maze_with_keys(width, height, num_keys):
-    np.random.seed(2)
     keys = []
     locks = []
     grid = np.ones(shape=(height, width))
