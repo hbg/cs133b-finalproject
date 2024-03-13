@@ -258,17 +258,11 @@ def main(seed_maze=False, visual=True):
 
     # Create the start/goal nodes.
 
-    (xstart, ystart) = (random.uniform(xmin, xmax), random.uniform(ymin, ymax))
+    (xstart, ystart) = maze.get_start()
     startnode = Node(xstart, ystart)
-    while not startnode.inFreespace():
-        (xstart, ystart) = (random.uniform(xmin, xmax), random.uniform(ymin, ymax))
-        startnode = Node(xstart, ystart)
 
-    (xgoal,  ygoal)  = (random.uniform(xmin, xmax), random.uniform(ymin, ymax))
+    (xgoal,  ygoal) = maze.get_goal()
     goalnode  = Node(xgoal,  ygoal)
-    while not goalnode.inFreespace():
-        (xgoal,  ygoal)  = (random.uniform(xmin, xmax), random.uniform(ymin, ymax))
-        goalnode  = Node(xgoal,  ygoal)
 
 
     keylist = []
