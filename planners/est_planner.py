@@ -24,7 +24,7 @@ from generators.maze import Maze
 DSTEP = 1
 
 # Maximum number of steps (attempts) or nodes (successful steps).
-SMAX = 500000
+SMAX = 5000
 NMAX = 1500
 
 keys = 5
@@ -144,7 +144,7 @@ class Node:
 #
 #   EST Functions
 #
-def est(startnode, goalnode, visual, keylist):
+def est(startnode, goalnode, keylist, visual=False):
     # Start the tree with the startnode (set no parent just in case).
     startnode.parent = None
     tree = [startnode]
@@ -154,11 +154,17 @@ def est(startnode, goalnode, visual, keylist):
     def addtotree(oldnode, newnode):
         newnode.parent = oldnode
         tree.append(newnode)
-        visual.drawEdge(oldnode, newnode, color='g', linewidth=1)
-        visual.show()
+        if visual:
+            visual.drawEdge(oldnode, newnode, color='g', linewidth=1)
+            visual.show()
     keys_collected = 0
     # Loop - keep growing the tree.
-    while True:
+    attempts = 0
+    while True and attempts < NMAX:
+        attempts += 1
+        if attempts % 300 == 0:
+            print(attempts)
+
         # Determine the local density by the number of nodes nearby.
         # KDTree uses the coordinates to compute the Euclidean distance.
         # It returns a NumPy array, same length as nodes in the tree.
@@ -183,7 +189,9 @@ def est(startnode, goalnode, visual, keylist):
                             grownode.x - grownode.parent.x)
 
         # Find something nearby: keep looping until the tree grows.
-        while True:
+        count = 0
+        while True and count < SMAX:
+            count += 1
             # Pick the next node randomly.
             angle = np.random.normal(heading, pi / 2)
             # NOTE: To remove the grid movement, comment out the next line
@@ -237,12 +245,16 @@ def PostProcess(path):
 #
 #  Main Code
 #
-def main():
+def main(seed_maze=False, visual=True):
     # Report the parameters.
     print('Running with step size ', DSTEP, ' and up to ', NMAX, ' nodes.')
 
+    if seed_maze:
+        maze = seed_maze
+
     # Create the figure.
-    visual = Visualization()
+    if visual:
+        visual = Visualization()
 
     # Create the start/goal nodes.
 
@@ -264,36 +276,42 @@ def main():
         x, y = key
         key_node = Node(x, y)
         keylist.append(key_node)
-        visual.drawNode(key_node, color='green', marker='o')
+        if visual:
+            visual.drawNode(key_node, color='green', marker='o')
 
 
     # Show the start/goal nodes.
-    visual.drawNode(startnode, color='orange', marker='o')
-    visual.drawNode(goalnode,  color='purple', marker='o')
-    visual.show("Showing basic world")
+    if visual:
+        visual.drawNode(startnode, color='orange', marker='o')
+        visual.drawNode(goalnode,  color='purple', marker='o')
+        visual.show("Showing basic world")
 
 
     # Run the EST planner.
     print("Running EST...")
-    path = est(startnode, goalnode, visual, keylist)
+    path = est(startnode, goalnode, keylist, visual)
 
     # If unable to connect, just note before closing.
     if not path:
-        visual.show("UNABLE TO FIND A PATH")
-        return
+        if visual:
+            visual.show("UNABLE TO FIND A PATH")
+        return -1
 
     # Show the path.
-    visual.drawPath(path, color='r', linewidth=2)
-    visual.show("Showing the raw path")
+    if visual:
+        visual.drawPath(path, color='r', linewidth=2)
+        visual.show("Showing the raw path")
 
 
     # Post process the path.
     PostProcess(path)
 
     # Show the post-processed path.
-    visual.drawPath(path, color='b', linewidth=2)
-    visual.show("Showing the post-processed path")
+    if visual:
+        visual.drawPath(path, color='b', linewidth=2)
+        visual.show("Showing the post-processed path")
 
+    return len(path)
 
 if __name__== "__main__":
     main()
