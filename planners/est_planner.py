@@ -212,7 +212,7 @@ def est(startnode, goalnode, keylist, visual=False):
                 print("Key collected!", keys_collected, "key(s) have been collected")
 
         # Once grown, also check whether to connect to goal.
-        if nextnode.distance(goalnode) < DSTEP:
+        if nextnode.distance(goalnode) < DSTEP and nextnode.connectsTo(goalnode):
             addtotree(nextnode, goalnode)
             break
 
@@ -247,12 +247,14 @@ def PostProcess(path):
 #
 #  Main Code
 #
-def main(seed_maze=False, visual=True, difficulty=.7):
-    if seed_maze:
+def main(seed_maze=False, visual=True):
+    global tree_size
+    global maze
+    if seed_maze != False:
         maze = seed_maze
 
     # Report the parameters.
-    print('Running with size ', maze.width, ', ', difficulty, ', ' ' and ', maze.num_keys, ' keys.')
+    print('Running with size ', maze.width, ' and ', maze.num_keys, ' keys.')
 
     # Create the figure.
     if visual:
@@ -260,18 +262,18 @@ def main(seed_maze=False, visual=True, difficulty=.7):
 
     # Create the start/goal nodes.
 
-    (xstart, ystart) = maze.get_start()
+    (xstart, ystart) = maze.start
     startnode = Node(xstart, ystart)
 
-    (xgoal,  ygoal) = maze.get_goal()
+    (xgoal,  ygoal) = maze.goal
     goalnode  = Node(xgoal,  ygoal)
 
-
-    keylist = []
-    for key in maze.keys:
-        x, y = key
-        key_node = Node(x, y)
-        keylist.append(key_node)
+    # Generate and show keys
+    keys = maze.get_keys()
+    key_list = []
+    for i in range(len(keys)):
+        key_node = Node(keys[i][0] + 0.5, keys[i][1] + 0.5)
+        key_list.append(key_node)
         if visual:
             visual.drawNode(key_node, color='green', marker='o')
 
@@ -283,9 +285,9 @@ def main(seed_maze=False, visual=True, difficulty=.7):
         visual.show("Showing basic world")
 
 
-    # Run the EST planner.
-    print("Running EST...")
-    path = est(startnode, goalnode, keylist, visual)
+    # Run the RRT planner.
+    print("Running RRT...")
+    path = est(startnode, goalnode, key_list, visual)
 
     # If unable to connect, just note before closing.
     if not path:
