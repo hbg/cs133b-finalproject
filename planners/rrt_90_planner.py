@@ -26,6 +26,7 @@ DSTEP = 1.5
 # Maximum number of steps (attempts) or nodes (successful steps).
 SMAX = 50000
 NMAX = 1500
+tree_size = 0
 
 
 ######################################################################
@@ -151,7 +152,8 @@ class Node:
 #
 #   RRT Functions
 #
-def rrt(startnode, goalnode, visual, keylist):
+def rrt(startnode, goalnode, keylist, visual=False):
+    global tree_size
     # Start the tree with the startnode (set no parent just in case).
     startnode.parent = None
     tree = [startnode]
@@ -161,8 +163,9 @@ def rrt(startnode, goalnode, visual, keylist):
     def addtotree(oldnode, newnode):
         newnode.parent = oldnode
         tree.append(newnode)
-        visual.drawEdge(oldnode, newnode, color='g', linewidth=1)
-        visual.show()
+        if visual:
+            visual.drawEdge(oldnode, newnode, color='g', linewidth=1)
+            visual.show()
 
     # Loop - keep growing the tree.
     steps = 0
@@ -215,22 +218,24 @@ def rrt(startnode, goalnode, visual, keylist):
 
 
                 # Check if we can grab a key as well
-                deleted_indices =set()
+                deleted_indices = set()
                 for i in range(len(keylist)):
                     if nextnode.distance(keylist[i]) < DSTEP and nextnode.connectsTo(keylist[i]):
                         deleted_indices.add(i)
                         addtotree(nextnode, keylist[i])
                         keys_collected += 1
-                        visual.show()
-                        visual.drawNode(keylist[i], color='red', marker='o') # change key color when collected
+                        if visual:
+                            visual.show()
+                            visual.drawNode(keylist[i], color='red', marker='o') # change key color when collected
                         print("Key collected!")
-                lock_polys = MultiPolygon([poly for idx, poly in enumerate(maze.lock_polys.geoms) if idx not in deleted_indices])
-                unlocked_poly = MultiPolygon([poly for idx, poly in enumerate(maze.lock_polys.geoms) if idx in deleted_indices])
-                maze.set_lock_polys(lock_polys)
+                if visual:
+                    lock_polys = MultiPolygon([poly for idx, poly in enumerate(maze.lock_polys.geoms) if idx not in deleted_indices])
+                    unlocked_poly = MultiPolygon([poly for idx, poly in enumerate(maze.lock_polys.geoms) if idx in deleted_indices])
+                    maze.set_lock_polys(lock_polys)
 
-                unlocked_poly_prep = prep(unlocked_poly)
-                for unlock_poly in unlocked_poly_prep.context.geoms:
-                    plt.plot(*unlock_poly.exterior.xy, color='red', linewidth=2)
+                    unlocked_poly_prep = prep(unlocked_poly)
+                    for unlock_poly in unlocked_poly_prep.context.geoms:
+                        plt.plot(*unlock_poly.exterior.xy, color='red', linewidth=2)
 
                 new_key_list = []
                 for i, elem in enumerate(keylist):
@@ -243,6 +248,7 @@ def rrt(startnode, goalnode, visual, keylist):
         # Check whether we should abort - too many steps or nodes.
         steps += 1
         if (steps >= SMAX) or (len(tree) >= NMAX):
+            tree_size = len(tree)
             print("Aborted after %d steps and the tree having %d nodes" %
                 (steps, len(tree)))
             return None
@@ -253,6 +259,7 @@ def rrt(startnode, goalnode, visual, keylist):
         path.insert(0, path[0].parent)
 
     # Report and return.
+    tree_size = len(tree)
     print("Finished after %d steps and the tree having %d nodes" %
           (steps, len(tree)))
     return path
@@ -272,57 +279,67 @@ def PostProcess(path):
 #
 #  Main Code
 #
-def main():
+def main(seed_maze=False, visual=True):
+    global tree_size
+    global maze
+    if seed_maze != False:
+        maze = seed_maze
+    
     # Report the parameters.
-    print('Running with step size ', DSTEP, ' and up to ', NMAX, ' nodes.')
+    print('Running with size ', maze.width, ' and ', maze.num_keys, ' keys.')
 
     # Create the figure.
-    visual = Visualization()
+    if visual:
+        visual = Visualization()
 
     # Create the start/goal nodes.
-
     (xstart, ystart) = maze.get_start()
     startnode = Node(xstart, ystart)
 
     (xgoal,  ygoal)  = maze.get_goal()
     goalnode  = Node(xgoal,  ygoal)
 
-
     # Generate and show keys
     keylist = []
-    for i in range(num_keys):
+    for i in range(len(maze.keys)):
         (key_x, key_y) = maze.keys[i]
         key = Node(key_x + 0.5, key_y + 0.5)
         keylist.append(key)
-        visual.drawNode(key, color='green', marker='o')
+        if visual:
+            visual.drawNode(key, color='green', marker='o')
 
     # Show the start/goal nodes.
-    visual.drawNode(startnode, color='orange', marker='o')
-    visual.drawNode(goalnode,  color='purple', marker='o')
-    visual.show("Showing basic world")
+    if visual:
+        visual.drawNode(startnode, color='orange', marker='o')
+        visual.drawNode(goalnode,  color='purple', marker='o')
+        visual.show("Showing basic world")
 
 
     # Run the RRT planner.
     print("Running RRT...")
-    path = rrt(startnode, goalnode, visual, keylist)
+    path = rrt(startnode, goalnode, keylist, visual)
 
     # If unable to connect, just note before closing.
     if not path:
-        visual.show("UNABLE TO FIND A PATH")
-        return
+        if visual:
+            visual.show("UNABLE TO FIND A PATH")
+        return -1
 
     # Show the path.
-    visual.drawPath(path, color='r', linewidth=2)
-    visual.show("Showing the raw path")
+    if visual:
+        visual.drawPath(path, color='r', linewidth=2)
+        visual.show("Showing the raw path")
 
 
     # Post process the path.
     PostProcess(path)
 
     # Show the post-processed path.
-    visual.drawPath(path, color='b', linewidth=2)
-    visual.show("Showing the post-processed path")
+    if visual:
+        visual.drawPath(path, color='b', linewidth=2)
+        visual.show("Showing the post-processed path")
 
+    return tree_size
 
 if __name__== "__main__":
     main()

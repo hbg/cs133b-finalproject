@@ -13,7 +13,7 @@ from math               import pi, sin, cos, atan2, sqrt, ceil
 from scipy.spatial      import KDTree
 from shapely.geometry   import Point, LineString, Polygon, MultiPolygon
 from shapely.prepared   import prep
-from maze_brain import Maze
+from generators.maze import Maze
 
 ######################################################################
 #
@@ -26,7 +26,7 @@ DSTEP = 1.0 # for this planner, 1.5 is a rough maximum, with 0.75-1.1 working qu
 # Maximum number of steps (attempts) or nodes (successful steps).
 SMAX = 500000
 NMAX = 1500
-
+tree_size = 0
 
 ######################################################################
 #
@@ -146,9 +146,10 @@ class Node:
 #
 #   EST Functions
 #
-def est(startnode, goalnode, visual, keylist):
+def est(startnode, goalnode, keylist, visual=True):
     global lock_polys
     global lock_polys_prep
+    global tree_size
     # Start the tree with the startnode (set no parent just in case).
     startnode.parent = None
     tree = [startnode]
@@ -158,8 +159,9 @@ def est(startnode, goalnode, visual, keylist):
     def addtotree(oldnode, newnode):
         newnode.parent = oldnode
         tree.append(newnode)
-        visual.drawEdge(oldnode, newnode, color='g', linewidth=1)
-        visual.show()
+        if visual:
+            visual.drawEdge(oldnode, newnode, color='g', linewidth=1)
+            visual.show()
 
     P = 0.15
     keys_collected = 0
@@ -180,12 +182,16 @@ def est(startnode, goalnode, visual, keylist):
 
         # Directly determine the distances to the goal node.
         distances = np.array([node.distance(goalnode) for node in tree])
-        distances_to_keys = np.array([sum([node.distance(key) for key in keylist]) / len(keylist) for node in tree])
+        if len(keylist) != 0:
+            distances_to_keys = np.array([sum([node.distance(key) for key in keylist]) / len(keylist) for node in tree])
 
         # Select the node from which to grow, which minimizes some metric.
         scale1 = 2
         scale2 = 3
-        index = np.argmin(numnear + scale2 * distances + scale1 * distances_to_keys)
+        if len(keylist) != 0:
+            index = np.argmin(numnear + scale2 * distances + scale1 * distances_to_keys)
+        else:
+            index = np.argmin(numnear + scale2 * distances + scale1)
         grownode = tree[index]
 
 
@@ -219,18 +225,20 @@ def est(startnode, goalnode, visual, keylist):
                 break
 
         # Check if we can grab a key as well
-        deleted_indices =set()
+        deleted_indices = set()
         for i in range(len(keylist)):
             if nextnode.distance(keylist[i]) < DSTEP and nextnode.connectsTo(keylist[i]):
                 deleted_indices.add(i)
                 addtotree(nextnode, keylist[i])
                 keys_collected += 1
-                visual.show()
-                visual.drawNode(keylist[i], color='red', marker='o') # change key color when collected
+                if visual:
+                    visual.show()
+                    visual.drawNode(keylist[i], color='red', marker='o') # change key color when collected
                 print("Key collected!")
-        lock_polys = MultiPolygon([poly for idx, poly in enumerate(maze.lock_polys.geoms) if idx not in deleted_indices])
-        unlocked_poly = MultiPolygon([poly for idx, poly in enumerate(maze.lock_polys.geoms) if idx in deleted_indices])
-        maze.set_lock_polys(lock_polys)
+        if visual:
+            lock_polys = MultiPolygon([poly for idx, poly in enumerate(maze.lock_polys.geoms) if idx not in deleted_indices])
+            unlocked_poly = MultiPolygon([poly for idx, poly in enumerate(maze.lock_polys.geoms) if idx in deleted_indices])
+            maze.set_lock_polys(lock_polys)
 
         new_key_list = []
         for i, elem in enumerate(keylist):
@@ -238,9 +246,10 @@ def est(startnode, goalnode, visual, keylist):
                 new_key_list.append(elem)
         keylist = new_key_list
 
-        unlocked_poly_prep = prep(unlocked_poly)
-        for unlock_poly in unlocked_poly_prep.context.geoms:
-            plt.plot(*unlock_poly.exterior.xy, color='red', linewidth=2)
+        if visual:
+            unlocked_poly_prep = prep(unlocked_poly)
+            for unlock_poly in unlocked_poly_prep.context.geoms:
+                plt.plot(*unlock_poly.exterior.xy, color='red', linewidth=2)
 
         # Once grown, also check whether to connect to goal.
         if nextnode.distance(goalnode) < DSTEP and nextnode.connectsTo(goalnode):
@@ -249,6 +258,7 @@ def est(startnode, goalnode, visual, keylist):
 
         # Check whether we should abort - too many nodes.
         if (len(tree) >= NMAX):
+            tree_size = NMAX
             print("Aborted with the tree having %d nodes" % len(tree))
             return None
 
@@ -258,6 +268,7 @@ def est(startnode, goalnode, visual, keylist):
         path.insert(0, path[0].parent)
 
     # Report and return.
+    tree_size = len(tree)
     print("Finished  with the tree having %d nodes" % len(tree))
     return path
 
@@ -276,56 +287,63 @@ def PostProcess(path):
 #
 #  Main Code
 #
-def main():
+def main(seed_maze=False, visual=True):
+    global maze
+    if seed_maze != False:
+        maze = seed_maze
+    
     # Report the parameters.
-    print('Running with step size ', DSTEP, ' and up to ', NMAX, ' nodes.')
+    print('Running with size ', maze.width, ' and ', maze.num_keys, ' keys.')
 
     # Create the figure.
-    visual = Visualization()
+    if visual:
+        visual = Visualization()
 
     # Create the start/goal nodes.
-
     (xstart, ystart) = maze.get_start()
     startnode = Node(xstart, ystart)
 
     (xgoal,  ygoal) = maze.get_goal()
     goalnode  = Node(xgoal,  ygoal)
 
-    # Generate and show keys
-    keys = maze.get_keys()
-    key_list = []
-    for i in range(len(keys)):
-        key_node = Node(keys[i][0] + 0.5, keys[i][1] + 0.5)
-        key_list.append(key_node)
-        visual.drawNode(key_node, color='green', marker='o')
-
+    keylist = []
+    for key in maze.keys:
+        x, y = key
+        key_node = Node(x, y)
+        keylist.append(key_node)
+        if visual:
+            visual.drawNode(key_node, color='green', marker='o')
 
     # Show the start/goal nodes.
-    visual.drawNode(startnode, color='orange', marker='o')
-    visual.drawNode(goalnode,  color='purple', marker='o')
-    visual.show("Showing basic world")
-
+    if visual:
+        visual.drawNode(startnode, color='orange', marker='o')
+        visual.drawNode(goalnode,  color='purple', marker='o')
+        visual.show("Showing basic world")
 
     # Run the EST planner.
-    print("Running EST...")
-    path = est(startnode, goalnode, visual, key_list)
+    print("Running EST 90...")
+    path = est(startnode, goalnode, keylist, visual)
 
     # If unable to connect, just note before closing.
     if not path:
-        visual.show("UNABLE TO FIND A PATH")
-        return
+        if visual:
+            visual.show("UNABLE TO FIND A PATH")
+        return -1
 
     # Show the path.
-    visual.drawPath(path, color='r', linewidth=2)
-    visual.show("Showing the raw path")
-
+    if visual:
+        visual.drawPath(path, color='r', linewidth=2)
+        visual.show("Showing the raw path")
 
     # Post process the path.
     PostProcess(path)
 
     # Show the post-processed path.
-    visual.drawPath(path, color='b', linewidth=2)
-    visual.show("Showing the post-processed path")
+    if visual:
+        visual.drawPath(path, color='b', linewidth=2)
+        visual.show("Showing the post-processed path")
+
+    return tree_size
 
 
 if __name__== "__main__":

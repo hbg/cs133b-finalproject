@@ -39,6 +39,7 @@ keys = 5
 difficulty = 0.7
 WIDTH = 41
 HEIGHT = 41
+tree_size = 0
 
 (xmin, xmax) = (0, WIDTH)
 (ymin, ymax) = (0, HEIGHT)
@@ -145,6 +146,7 @@ class Node:
 #   EST Functions
 #
 def est(startnode, goalnode, keylist, visual=False):
+    global tree_size
     # Start the tree with the startnode (set no parent just in case).
     startnode.parent = None
     tree = [startnode]
@@ -162,8 +164,6 @@ def est(startnode, goalnode, keylist, visual=False):
     attempts = 0
     while True and attempts < NMAX:
         attempts += 1
-        if attempts % 300 == 0:
-            print(attempts)
 
         # Determine the local density by the number of nodes nearby.
         # KDTree uses the coordinates to compute the Euclidean distance.
@@ -205,7 +205,7 @@ def est(startnode, goalnode, keylist, visual=False):
 
 
         # Check if we can grab a key as well
-        for i in range(keys):
+        for i in range(len(keylist)):
             if nextnode.distance(keylist[i]) < DSTEP and nextnode.connectsTo(keylist[i]) and keylist[i] not in tree:
                 addtotree(nextnode, keylist[i])
                 keys_collected += 1
@@ -218,6 +218,7 @@ def est(startnode, goalnode, keylist, visual=False):
 
         # Check whether we should abort - too many nodes.
         if (len(tree) >= NMAX):
+            tree_size = NMAX
             print("Aborted with the tree having %d nodes" % len(tree))
             return None
 
@@ -227,6 +228,7 @@ def est(startnode, goalnode, keylist, visual=False):
         path.insert(0, path[0].parent)
 
     # Report and return.
+    tree_size = len(tree)
     print("Finished  with the tree having %d nodes" % len(tree))
     return path
 
@@ -245,12 +247,12 @@ def PostProcess(path):
 #
 #  Main Code
 #
-def main(seed_maze=False, visual=True):
-    # Report the parameters.
-    print('Running with step size ', DSTEP, ' and up to ', NMAX, ' nodes.')
-
+def main(seed_maze=False, visual=True, difficulty=.7):
     if seed_maze:
         maze = seed_maze
+
+    # Report the parameters.
+    print('Running with size ', maze.width, ', ', difficulty, ', ' ' and ', maze.num_keys, ' keys.')
 
     # Create the figure.
     if visual:
@@ -305,7 +307,7 @@ def main(seed_maze=False, visual=True):
         visual.drawPath(path, color='b', linewidth=2)
         visual.show("Showing the post-processed path")
 
-    return len(path)
+    return tree_size
 
 if __name__== "__main__":
     main()
