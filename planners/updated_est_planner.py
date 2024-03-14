@@ -162,15 +162,17 @@ def est(startnode, goalnode, visual, keylist):
 
     P = 0.15
     keys_collected = 0
+    leaf_nodes = []
     # Loop - keep growing the tree.
     while True:
         # Determine the local density by the number of nodes nearby.
         # KDTree uses the coordinates to compute the Euclidean distance.
         # It returns a NumPy array, same length as nodes in the tree.
         dstep = DSTEP
-        if np.random.random() < P and len(tree) > 1:
-            sample = np.random.choice(tree)
-            tree.remove(sample)
+        if len(leaf_nodes) > 1:
+            sample = np.random.choice(leaf_nodes)
+            if sample in tree:
+                tree.remove(sample)
         X = np.array([node.coordinates() for node in tree])
         kdtree  = KDTree(X)
         numnear = kdtree.query_ball_point(X, r=1.5*dstep, return_length=True)
@@ -202,11 +204,11 @@ def est(startnode, goalnode, visual, keylist):
             # angle = (angle // (pi / 4)) * (pi / 4)
             nextnode = Node(grownode.x + dstep * cos(angle), grownode.y + dstep * sin(angle))
             attempts += 1
-            if attempts > 10:
-                tree.remove(grownode)
-                break
             # Try to connect.
             if grownode.connectsTo(nextnode) and nextnode.inFreespace():
+                if grownode in leaf_nodes:
+                    leaf_nodes.remove(grownode)
+                leaf_nodes.append(nextnode)
                 addtotree(grownode, nextnode)
                 break
 
